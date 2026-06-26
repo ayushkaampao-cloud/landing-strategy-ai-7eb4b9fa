@@ -83,13 +83,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Submit your brand and product. Get five distinct landing page strategies — Performance, A+ Story, Deep Conversion, Brand Story, Trust & Comparison — previewed in real templates.",
       },
-      { property: "og:title", content: "Landing Page AI 1.0" },
+      { property: "og:title", content: "Landing Page AI 1.0 — Five strategic landing pages, generated" },
       {
         property: "og:description",
         content: "Five strategic landing page directions for your product, in minutes.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Landing Page AI 1.0 — Five strategic landing pages, generated" },
+      { name: "description", content: "Strategic Page Architect generates five distinct landing page concepts based on conversion frameworks for e-commerce and performance brands." },
+      { property: "og:description", content: "Strategic Page Architect generates five distinct landing page concepts based on conversion frameworks for e-commerce and performance brands." },
+      { name: "twitter:description", content: "Strategic Page Architect generates five distinct landing page concepts based on conversion frameworks for e-commerce and performance brands." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/df286114-bb4b-4912-b8ca-8991d826f93b/id-preview-8db2f300--4403a3bf-924e-415d-a0ac-9e56a56093b5.lovable.app-1782465378576.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/df286114-bb4b-4912-b8ca-8991d826f93b/id-preview-8db2f300--4403a3bf-924e-415d-a0ac-9e56a56093b5.lovable.app-1782465378576.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
