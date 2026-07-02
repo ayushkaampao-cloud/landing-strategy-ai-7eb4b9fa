@@ -71,6 +71,8 @@ interface StoreContextValue extends AppData {
     input: Omit<Project, "id" | "createdAt">,
   ) => Project;
   saveConcepts: (projectId: string, concepts: LandingPageConcept[]) => void;
+  deleteProject: (projectId: string) => void;
+  deleteWorkspace: (workspaceId: string) => void;
   activeWorkspace: Workspace | null;
   // Research / elements / images (persisted via storage helper)
   getResearch: (projectId: string) => ProjectResearch | null;
@@ -79,6 +81,10 @@ interface StoreContextValue extends AppData {
   saveElements: (conceptId: string, e: LandingPageElements) => void;
   getImages: (conceptId: string) => GeneratedImagePreview[];
   saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => void;
+  getProductImages: (projectId: string) => ProductImageRef[];
+  saveProductImages: (projectId: string, imgs: ProductImageRef[]) => void;
+  getVisualProfile: (projectId: string) => ProductVisualProfile | null;
+  saveVisualProfile: (projectId: string, p: ProductVisualProfile | null) => void;
   // For dashboard status
   version: number;
 }
