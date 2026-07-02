@@ -233,7 +233,16 @@ function NewProduct() {
           )}
 
           <div className="pt-6 mt-6 border-t border-border">
-            <h2 className="text-lg font-semibold mb-4 tracking-tight">Project</h2>
+            <h2 className="text-lg font-semibold mb-1 tracking-tight">Product images</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Upload up to 10 photos of the real product. We analyze them so downstream copy and generated visuals stay grounded in what your product actually looks like.
+            </p>
+            <ProductImageUploader
+              images={productImages}
+              onChange={setProductImages}
+              optional
+            />
+          </div>
             <Field
               label="Project name"
               value={projectName}
