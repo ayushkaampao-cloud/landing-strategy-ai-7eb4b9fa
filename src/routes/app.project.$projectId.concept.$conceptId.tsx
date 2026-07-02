@@ -95,16 +95,78 @@ function ConceptDetail() {
     }
   };
 
-  const regenerate = () => {
-    const fresh = generateConceptsForProject(workspace, product, project);
-    saveConcepts(project.id, fresh);
-    const newConcept = fresh.find((c) => c.templateFamily === concept.templateFamily);
-    if (newConcept) {
+  const [regenerating, setRegenerating] = useState(false);
+  const regenerate = async () => {
+    if (!workspace || !product || !project) return;
+    setRegenerating(true);
+    try {
+      const research =
+        getResearch(projectId) ?? null;
+      if (!research) {
+        // No research cached — bounce through the full generating flow.
+        navigate({
+          to: "/app/project/$projectId/generating",
+          params: { projectId },
+          replace: true,
+        });
+        return;
+      }
+      const res = await fetch("/api/generate-strategies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project.id,
+          workspace: {
+            name: workspace.name,
+            brandDescription: workspace.brandDescription,
+            brandVoice: workspace.brandVoice,
+            primaryAudience: workspace.primaryAudience,
+          },
+          product: {
+            name: product.name,
+            shortDescription: product.shortDescription,
+            keyFeatures: product.keyFeatures,
+            keyBenefits: product.keyBenefits,
+            priceInfo: product.priceInfo,
+          },
+          project: {
+            goal: project.goal,
+            tone: project.tone,
+            desiredAngle: project.desiredAngle,
+          },
+          research,
+          onlyFamily: concept.templateFamily,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as { concepts: import("@/types").LandingPageConcept[] };
+      const fresh = data.concepts[0];
+      if (!fresh) throw new Error("No concept returned");
+      // Replace only the current framework's concept, keep the others.
+      const others = concepts.filter(
+        (c) => c.projectId !== project.id || c.templateFamily !== concept.templateFamily,
+      );
+      saveConcepts(project.id, [...others.filter((c) => c.projectId === project.id), fresh]);
       navigate({
         to: "/app/project/$projectId/concept/$conceptId",
-        params: { projectId, conceptId: newConcept.id },
+        params: { projectId, conceptId: fresh.id },
         replace: true,
       });
+    } catch (err) {
+      console.error("[regenerate] error:", err);
+      // Last-resort fallback so the app never dead-ends.
+      const fresh = generateConceptsForProject(workspace, product, project);
+      saveConcepts(project.id, fresh);
+      const swap = fresh.find((c) => c.templateFamily === concept.templateFamily);
+      if (swap) {
+        navigate({
+          to: "/app/project/$projectId/concept/$conceptId",
+          params: { projectId, conceptId: swap.id },
+          replace: true,
+        });
+      }
+    } finally {
+      setRegenerating(false);
     }
   };
 
