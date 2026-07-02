@@ -26,6 +26,8 @@ function ConceptDetail() {
     saveElements,
     getImages,
     saveImages,
+    getProductImages,
+    getVisualProfile,
   } = useStore();
   const navigate = useNavigate();
   const [copied, setCopied] = useState<string | null>(null);
@@ -36,6 +38,7 @@ function ConceptDetail() {
   const [imagesError, setImagesError] = useState<string | null>(null);
   const [elementsVersion, setElementsVersion] = useState(0);
   const [imagesVersion, setImagesVersion] = useState(0);
+  const [realGenerating, setRealGenerating] = useState<Record<string, boolean>>({});
 
 
   const project = projects.find((p) => p.id === projectId);
