@@ -113,6 +113,99 @@ function ConceptDetail() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const research = getResearch(projectId);
+  const elements = useMemo(
+    () => getElements(conceptId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conceptId, elementsVersion],
+  );
+  const images = useMemo(
+    () => getImages(conceptId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conceptId, imagesVersion],
+  );
+  const imageBySection = useMemo(() => {
+    const map: Record<string, GeneratedImagePreview> = {};
+    images.forEach((i) => (map[i.sectionId] = i));
+    return map;
+  }, [images]);
+
+  async function handleGenerateElements() {
+    setElementsLoading(true);
+    setElementsError(null);
+    setElementsStep(1);
+    try {
+      const stepTimer = setInterval(() => setElementsStep((s) => Math.min(s + 1, 4)), 700);
+      const res = await fetch("/api/generate-elements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          concept,
+          workspace: {
+            name: workspace.name,
+            brandDescription: workspace.brandDescription,
+            primaryAudience: workspace.primaryAudience,
+          },
+          product: {
+            name: product.name,
+            shortDescription: product.shortDescription,
+            priceInfo: product.priceInfo,
+          },
+        }),
+      });
+      clearInterval(stepTimer);
+      if (!res.ok) throw new Error((await res.text()) || "Element generation failed");
+      const data = (await res.json()) as LandingPageElements;
+      saveElements(conceptId, data);
+      setElementsVersion((v) => v + 1);
+      setElementsStep(4);
+    } catch (err) {
+      setElementsError((err as Error).message);
+    } finally {
+      setElementsLoading(false);
+    }
+  }
+
+  async function handleGenerateImages() {
+    if (!elements) return;
+    setImagesLoading(true);
+    setImagesError(null);
+    try {
+      const items = [
+        ...elements.hero.imagePrompts.map((p, i) => ({
+          sectionId: `hero-${i}`,
+          imagePrompt: p,
+          imageStyle: elements.globalStyle.imageStyle,
+        })),
+        ...elements.sections.flatMap((s) =>
+          (s.imagePrompts ?? []).map((p) => ({
+            sectionId: s.sectionId,
+            imagePrompt: p,
+            imageStyle: elements.globalStyle.imageStyle,
+          })),
+        ),
+      ];
+      const res = await fetch("/api/generate-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectName: project.projectName,
+          conceptName: concept.conceptName,
+          items,
+        }),
+      });
+      if (!res.ok) throw new Error("Image generation failed");
+      const data = (await res.json()) as { previews: GeneratedImagePreview[] };
+      saveImages(conceptId, data.previews);
+      setImagesVersion((v) => v + 1);
+    } catch (err) {
+      setImagesError((err as Error).message);
+    } finally {
+      setImagesLoading(false);
+    }
+  }
+
+
   return (
     <>
       <TopBar>
