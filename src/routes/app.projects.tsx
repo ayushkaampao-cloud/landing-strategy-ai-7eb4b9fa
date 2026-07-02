@@ -50,8 +50,18 @@ function ProjectsList() {
             </p>
           </div>
           {activeWorkspace && (
-            <div className="mono-tag text-muted-foreground">
-              {activeWorkspace.name} · {wsProjects.length} project{wsProjects.length === 1 ? "" : "s"}
+            <div className="flex items-center gap-3">
+              <div className="mono-tag text-muted-foreground">
+                {activeWorkspace.name} · {wsProjects.length} project{wsProjects.length === 1 ? "" : "s"}
+              </div>
+              <button
+                type="button"
+                onClick={onDeleteBrand}
+                className="mono-tag text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
+                title="Delete brand and all its projects"
+              >
+                <Trash2 className="size-3" /> Delete brand
+              </button>
             </div>
           )}
         </div>
