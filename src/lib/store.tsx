@@ -12,6 +12,8 @@ import type {
   LandingPageConcept,
   LandingPageElements,
   Product,
+  ProductImageRef,
+  ProductVisualProfile,
   Project,
   ProjectResearch,
   User,
