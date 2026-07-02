@@ -525,9 +525,10 @@ function ConceptDetail() {
               </button>
               <button
                 onClick={regenerate}
-                className="w-full h-9 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+                disabled={regenerating}
+                className="w-full h-9 text-[12px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-60"
               >
-                ↻ Regenerate this concept
+                {regenerating ? "Regenerating…" : "↻ Regenerate this concept"}
               </button>
             </div>
           </div>
