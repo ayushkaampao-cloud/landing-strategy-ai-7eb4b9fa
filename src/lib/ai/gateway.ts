@@ -120,7 +120,20 @@ async function callOpenRouter(prompt: string, opts: LLMOptions): Promise<string>
         { role: "user", content: prompt },
       ],
       temperature: opts.temperature ?? 0.8,
-      ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+      ...(opts.responseSchema
+        ? {
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: opts.schemaName ?? "Output",
+                schema: opts.responseSchema,
+                strict: true,
+              },
+            },
+          }
+        : opts.json
+          ? { response_format: { type: "json_object" } }
+          : {}),
     }),
   });
   if (!res.ok) {
