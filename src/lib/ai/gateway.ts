@@ -33,6 +33,7 @@ async function callGeminiDirect(prompt: string, opts: LLMOptions): Promise<strin
       temperature: opts.temperature ?? 0.8,
       ...(opts.maxTokens ? { maxOutputTokens: opts.maxTokens } : {}),
       ...(opts.json ? { responseMimeType: "application/json" } : {}),
+      ...(opts.responseSchema ? { responseSchema: opts.responseSchema } : {}),
     },
   };
   if (opts.system) {
