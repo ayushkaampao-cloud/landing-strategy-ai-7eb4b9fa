@@ -8,12 +8,16 @@ import {
   type ReactNode,
 } from "react";
 import type {
+  GeneratedImagePreview,
   LandingPageConcept,
+  LandingPageElements,
   Product,
   Project,
+  ProjectResearch,
   User,
   Workspace,
 } from "@/types";
+import { storage } from "./storage";
 
 interface AppData {
   user: User | null;
@@ -66,6 +70,15 @@ interface StoreContextValue extends AppData {
   ) => Project;
   saveConcepts: (projectId: string, concepts: LandingPageConcept[]) => void;
   activeWorkspace: Workspace | null;
+  // Research / elements / images (persisted via storage helper)
+  getResearch: (projectId: string) => ProjectResearch | null;
+  saveResearch: (projectId: string, r: ProjectResearch) => void;
+  getElements: (conceptId: string) => LandingPageElements | null;
+  saveElements: (conceptId: string, e: LandingPageElements) => void;
+  getImages: (conceptId: string) => GeneratedImagePreview[];
+  saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => void;
+  // For dashboard status
+  version: number;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -172,6 +185,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [data.workspaces, data.activeWorkspaceId],
   );
 
+  const [version, setVersion] = useState(0);
+  const bump = useCallback(() => setVersion((v) => v + 1), []);
+
   const value: StoreContextValue = {
     ...data,
     activeWorkspace,
@@ -182,6 +198,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     createProduct,
     createProject,
     saveConcepts,
+    version,
+    getResearch: (id) => storage.loadResearch(id),
+    saveResearch: (id, r) => {
+      storage.saveResearch(id, r);
+      bump();
+    },
+    getElements: (id) => storage.loadElements(id),
+    saveElements: (id, e) => {
+      storage.saveElements(id, e);
+      bump();
+    },
+    getImages: (id) => storage.loadImages(id),
+    saveImages: (id, imgs) => {
+      storage.saveImages(id, imgs);
+      bump();
+    },
   };
 
   return (
