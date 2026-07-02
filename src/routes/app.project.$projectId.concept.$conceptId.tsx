@@ -350,6 +350,94 @@ function ConceptDetail() {
             </div>
 
             <div className="space-y-2 pt-4 border-t border-border">
+              <div className="mono-tag text-muted-foreground mb-1">Elements & visuals</div>
+              {!elements ? (
+                <button
+                  onClick={handleGenerateElements}
+                  disabled={elementsLoading}
+                  className="w-full h-10 text-[13px] font-medium bg-ink text-background rounded-md hover:opacity-90 disabled:opacity-60"
+                >
+                  {elementsLoading
+                    ? ["Breaking strategy into blocks…", "Writing headlines & CTAs…", "Preparing image prompts…", "Packaging elements…"][elementsStep] ?? "Working…"
+                    : "Get elements for this page"}
+                </button>
+              ) : (
+                <>
+                  <div className="p-3 bg-surface border border-border rounded-lg text-[12px]">
+                    <div className="mono-tag text-muted-foreground mb-1">Hero headline</div>
+                    <div className="font-medium mb-2 leading-snug">{elements.hero.headline}</div>
+                    <div className="text-muted-foreground leading-snug mb-2">
+                      {elements.hero.subheadline}
+                    </div>
+                    <div className="flex gap-1">
+                      <span className="mono-tag px-1.5 py-0.5 bg-ink text-background rounded">
+                        {elements.hero.primaryCTA}
+                      </span>
+                      {elements.hero.secondaryCTA && (
+                        <span className="mono-tag px-1.5 py-0.5 bg-surface-muted rounded">
+                          {elements.hero.secondaryCTA}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-surface border border-border rounded-lg text-[11px] leading-snug space-y-1">
+                    <div className="mono-tag text-muted-foreground mb-1">Global style</div>
+                    <div>· {elements.globalStyle.designMood}</div>
+                    <div>· {elements.globalStyle.imageStyle}</div>
+                    <div>· {elements.globalStyle.colorMood}</div>
+                    <div>· {elements.globalStyle.typographyMood}</div>
+                  </div>
+                  <button
+                    onClick={() => copy("elements", elements.copyExportText)}
+                    className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted"
+                  >
+                    {copied === "elements" ? "Copied ✓" : "Copy all elements"}
+                  </button>
+                  <button
+                    onClick={() =>
+                      copy(
+                        "prompts",
+                        [
+                          ...elements.hero.imagePrompts,
+                          ...elements.sections.flatMap((s) => s.imagePrompts ?? []),
+                        ].join("\n"),
+                      )
+                    }
+                    className="w-full h-9 text-[12px] font-medium text-muted-foreground hover:text-foreground border border-border rounded-md"
+                  >
+                    {copied === "prompts" ? "Copied ✓" : "Copy image prompts"}
+                  </button>
+                  <button
+                    onClick={handleGenerateImages}
+                    disabled={imagesLoading}
+                    className="w-full h-10 text-[13px] font-medium bg-accent text-background rounded-md hover:opacity-90 disabled:opacity-60"
+                  >
+                    {imagesLoading
+                      ? "Generating preview visuals…"
+                      : images.length > 0
+                        ? "↻ Regenerate images"
+                        : "Generate images"}
+                  </button>
+                  {images.length > 0 && (
+                    <div className="mono-tag text-muted-foreground text-center pt-1">
+                      {images.length} preview visuals attached · simulated
+                    </div>
+                  )}
+                </>
+              )}
+              {elementsError && (
+                <div className="p-2 text-[11px] bg-red-500/10 border border-red-500/30 rounded text-red-800">
+                  {elementsError}
+                </div>
+              )}
+              {imagesError && (
+                <div className="p-2 text-[11px] bg-red-500/10 border border-red-500/30 rounded text-red-800">
+                  {imagesError}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-border mt-4">
               <div className="mono-tag text-muted-foreground mb-1">Copy actions</div>
               <button
                 onClick={() => copy("outline", outlineText())}
@@ -365,7 +453,7 @@ function ConceptDetail() {
               </button>
               <button
                 onClick={() => copy("full", fullText())}
-                className="w-full h-9 text-[13px] font-medium bg-ink text-background rounded-md hover:opacity-90"
+                className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted"
               >
                 {copied === "full" ? "Copied ✓" : "Copy full page content"}
               </button>
@@ -383,6 +471,30 @@ function ConceptDetail() {
   );
 }
 
+function RailBlock({
+  label,
+  body,
+  tone,
+}: {
+  label: string;
+  body: string;
+  tone?: "muted";
+}) {
+  return (
+    <div
+      className={`p-3 border rounded-lg ${
+        tone === "muted"
+          ? "bg-surface-muted/60 border-border"
+          : "bg-surface border-border"
+      }`}
+    >
+      <div className="mono-tag text-muted-foreground mb-1">{label}</div>
+      <div className="text-[12px] leading-relaxed">{body}</div>
+    </div>
+  );
+}
+
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " ");
 }
+
