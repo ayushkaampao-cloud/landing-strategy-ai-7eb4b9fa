@@ -231,4 +231,6 @@ function renderSection(s: SectionProps) {
         </section>
       );
   }
+  return null;
 }
+
