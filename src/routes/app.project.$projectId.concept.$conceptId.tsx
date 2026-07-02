@@ -198,6 +198,40 @@ function ConceptDetail() {
     return map;
   }, [images]);
 
+  const productImages = getProductImages(projectId);
+  const visualProfile = getVisualProfile(projectId);
+
+  async function handleGenerateRealImage(sectionId: string) {
+    const img = imageBySection[sectionId];
+    if (!img) return;
+    setRealGenerating((s) => ({ ...s, [sectionId]: true }));
+    try {
+      const url = await generateRealImage({
+        prompt: img.imagePrompt,
+        negativePrompt: concept.schema.sections.find((s) => s.id === sectionId)?.negativePrompt,
+        imageMode: img.imageMode,
+        visualProfile,
+        referenceImages: productImages,
+      });
+      const next = images.map((i) =>
+        i.sectionId === sectionId ? { ...i, realUrl: url, status: "real" as const } : i,
+      );
+      saveImages(conceptId, next);
+      setImagesVersion((v) => v + 1);
+      toast.success("Real image generated");
+    } catch (err) {
+      const next = images.map((i) =>
+        i.sectionId === sectionId ? { ...i, status: "failed" as const } : i,
+      );
+      saveImages(conceptId, next);
+      setImagesVersion((v) => v + 1);
+      toast.error(`Image generation failed: ${(err as Error).message}`);
+    } finally {
+      setRealGenerating((s) => ({ ...s, [sectionId]: false }));
+    }
+  }
+
+
   async function handleGenerateElements() {
     setElementsLoading(true);
     setElementsError(null);
