@@ -1,66 +1,88 @@
-# Plan: 3-tier provider fallback in `src/lib/ai/gateway.ts`
+# Landing Page AI — Intelligence Upgrade Plan
 
-Single-file change. Preserves `callLLM`, `callLLMJson`, `extractJson`, and `LLMOptions` signatures so no callers change.
+Scope: content + image intelligence only. No UI redesign, no route changes, no Supabase, no publishing. Existing gateway fallback chain (Gemini direct → Lovable Gateway → OpenRouter) stays untouched.
 
-## Fallback chain
+## 1. Gateway: add structured-output support
 
-For every call, try in order and stop at first success:
+Extend `src/lib/ai/gateway.ts` (non-breaking) with an optional `responseSchema` param on `callLLMJson`:
 
-1. **`gemini_direct`** — if `process.env.GEMINI_API_KEY` is set, call Google's Generative Language API directly.
-2. **`lovable_gateway`** — Gemini via Lovable AI Gateway using `LOVABLE_API_KEY` (current default path).
-3. **`openrouter`** — Google Gemini via OpenRouter using `OPENROUTER_API_KEY` if set.
+- Gemini direct path: pass `generationConfig: { responseMimeType: "application/json", responseSchema, ... }`.
+- Lovable Gateway / OpenRouter paths: translate to `response_format: { type: "json_schema", json_schema: { name, schema, strict: true } }`.
+- Existing signatures still work when no schema is passed. Provider selection + fallback logic unchanged.
+- Add small helper `defineSchema()` for building schemas with stable `propertyOrdering` (Gemini-specific field, ignored elsewhere).
 
-If a tier throws (missing key, network, 4xx/5xx, rate limit, JSON parse failure), log the failure reason and try the next tier. If all tiers fail, throw an aggregated error listing which tiers were attempted and their status.
+## 2. New type surface (`src/types.ts`)
 
-## Direct Gemini call (`callGeminiDirect`)
+Extend without breaking existing consumers:
 
-- Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`
-- Model: `gemini-2.5-flash` (matches OpenRouter fallback tier; direct API doesn't accept the `-preview` gateway alias).
-- Request body maps our `LLMOptions`:
-  - `contents: [{ role: "user", parts: [{ text: prompt }] }]`
-  - `systemInstruction: { parts: [{ text: opts.system }] }` when present
-  - `generationConfig: { temperature, maxOutputTokens, responseMimeType: opts.json ? "application/json" : undefined }`
-- Response: extract `candidates[0].content.parts[0].text`.
-- Treat empty text or non-200 as failure to trigger fallback.
-- Key never logged; only `provider="gemini_direct"` and HTTP status on failure.
+- `ProjectClassification`: `category` (union of 8 values from spec), `subcategory`, `audienceSophistication`, `awarenessLevel`, `toneSummary`.
+- `ProjectResearch` gains: `classification`, `trustSignalsNeeded[]`, `verifiedFacts[]`, `forbiddenClaims[]` (keep old fields for back-compat).
+- `SectionProps` / elements gain: `imageMode` (union of 13 modes), `negativePrompt`, `proofNeeded?: boolean`, `placeholder?: boolean` (drives the "Needs your input" UI tag).
+- `VisualIdentityBrief`: brandName, category, productType, visualIntent, preferredImageModes[], forbiddenImageModes[], sceneSuggestions, productPresentationStyle, environmentStyle, lightingStyle, compositionStyle, paletteHints, realismLevel.
+- `GeneratedImagePreview` gains: `imageMode`, `category`.
 
-## Logging
+## 3. New AI service modules
 
-Add a lightweight tagged `console.log("[llm]", { provider, ok, ms, status? })` at the end of each attempt. On success, log once with the winning provider. On failure of a tier, log `console.warn("[llm] fallback", { from, reason })`. Never include headers, bodies with prompts, or key material.
+Create thin, single-purpose modules that all call through the existing gateway:
 
-## Function shape
+- `src/lib/ai/classify.ts` — `classifyProject(input) → ProjectClassification`. Runs first, always. Structured schema.
+- `src/lib/ai/research.ts` — `researchProject(input, classification) → ProjectResearch`. Handles `sourceMode: "url" | "brief"`, best-effort page fetch (reuse logic from existing `api/research-project.ts`), records `note` on fetch failure. Emits `verifiedFacts` only from user brief or fetched text; emits `forbiddenClaims` naming everything not provided (reviews, ratings, press, guarantees, shipping, certifications, metrics).
+- `src/lib/ai/strategies.ts` — `generateStrategies(research, classification) → LandingPageConcept[5]`. One Gemini call per framework family (parallel), each prompt receives classification + verifiedFacts + forbiddenClaims + category-language guidance. Structured schema per concept.
+- `src/lib/ai/elements.ts` — `generateElements(concept, research, classification) → LandingPageElements`. Adds `proofNeeded`, `placeholder` flags, `copyExportText`.
+- `src/lib/ai/visual.ts` — `generateVisualIdentityBrief(research, classification, product) → VisualIdentityBrief`. Cached per project.
+- `src/lib/ai/images.ts` — `generateImagePrompts(section, visualBrief, classification)` produces the structured prompt object (imageMode, subject, setting, cameraFraming, lighting, styleReferences, mood, negativePrompt) and `pickPreviewSeed(imageMode, category)` for the preview endpoint.
 
-```ts
-export async function callLLM(prompt, opts = {}): Promise<string>
-export async function callLLMJson<T>(prompt, opts = {}): Promise<T>
-```
+Every prompt in strategies/elements/images includes the hard rule:
+> Never invent numbers, ratings, review counts, quotes, press/media mentions, warehouse or shipping claims, guarantee terms, return rates, certifications, or competitor claims. If not in verifiedFacts, output a labeled placeholder ("Add verified metric here", "Add real customer testimonial here") and set `placeholder: true`.
 
-Internally:
+And the category-language rule (SaaS/finance vs. DTC/beauty/food vs. service vs. hardware) exactly as specified in the brief.
 
-```ts
-const attempts = [
-  { name: "gemini_direct", enabled: !!process.env.GEMINI_API_KEY, run: callGeminiDirect },
-  { name: "lovable_gateway", enabled: !!process.env.LOVABLE_API_KEY, run: callGemini },
-  { name: "openrouter", enabled: !!process.env.OPENROUTER_API_KEY, run: callOpenRouter },
-];
-// try in order, aggregate errors, log winner
-```
+## 4. Server routes
 
-`callLLMJson` keeps its current behavior (calls `callLLM` with `json: true`, then `extractJson`). If parsing fails on one tier's output, that counts as a tier failure and the chain continues.
+Update in place; keep paths and response shapes compatible with existing UI consumers:
 
-## Verification (before further refactor)
+- `src/routes/api/classify-project.ts` (new) — POST, returns `ProjectClassification`.
+- `src/routes/api/research-project.ts` — call `classifyProject` first, then `researchProject`, return extended `ProjectResearch` including `classification`.
+- `src/routes/api/generate-strategies.ts` — delegate to `strategies.ts`. Remove the hardcoded `FRAMEWORKS` copy-shaping logic; keep only the framework family list (name + section-count hint) and pass everything else to the model with the research + classification.
+- `src/routes/api/generate-elements.ts` — delegate to `elements.ts`; adds placeholder/proofNeeded flags.
+- `src/routes/api/generate-images.ts` — call `images.ts` to (a) classify each section's imageMode using the visual brief, (b) build the structured prompt, (c) map (imageMode, category) → a curated deterministic Picsum seed set (e.g., abstract textures for `interface_ui`/`abstract_brand_texture`, product-composition-style seeds for `product_packshot`, editorial seeds for `founder_story_editorial`, plain gradient placeholder for `no_image_needed`). Never fully random.
 
-Add a tiny debug route `src/routes/api/debug-llm.ts` (GET) that runs a trivial prompt (`"Return JSON {\"ok\": true}"`) through `callLLMJson` and responds with `{ provider, result }`. I'll:
+## 5. Generator refactor (`src/lib/generator.ts`)
 
-1. Hit it with `stack_modern--invoke-server-function` → expect `gemini_direct`.
-2. Temporarily blank `GEMINI_API_KEY` via a query flag (`?skip=gemini_direct`) that forces skipping tiers, to prove `lovable_gateway` responds.
-3. Skip both to confirm `openrouter` path (only if `OPENROUTER_API_KEY` exists; otherwise report it's not configured and skip that assertion).
-4. Check `stack_modern--server-function-logs` for the `[llm]` log lines.
+- Strip all hardcoded copy, fake proof, review counts, press mentions (WIRED/VOGUE/GQ etc.), warehouse/shipping/guarantee claims.
+- Becomes a thin orchestrator: `runFullPipeline(project)` → classify → research → strategies (or single-concept regenerate) → elements → images, all through the AI modules above.
+- Regenerate-concept, get-elements, and generate-images entry points all go through this orchestrator.
+- Keep ONE clearly-labeled `LAST_RESORT_FALLBACK` used only if the entire gateway chain throws. It emits placeholder-only sections ("Add real headline here", "Add verified metric here", `placeholder: true`) — never fabricated content.
 
-The debug route stays in the codebase for now (harmless GET, no secrets exposed) and can be removed later.
+## 6. UI trust labeling
+
+Minimal, additive to existing components (no redesign):
+
+- `src/components/SectionRenderer.tsx` and the elements rail in `app.project.$projectId.concept.$conceptId.tsx`: when a field or section has `placeholder: true` or `proofNeeded: true`, render a small badge ("Needs your input" / "Suggested — verify before use") next to the value using the existing `Badge` component.
+- No layout, spacing, or navigation changes.
+
+## 7. Self-test before finish
+
+Run the pipeline end-to-end against two seed inputs (executed via the debug route or a temporary script, not shipped as UI):
+
+1. SaaS invoicing product.
+2. DTC skincare serum.
+
+Verify:
+- Classification returns the right category for each.
+- No fabricated proof/ratings/press anywhere in concepts or elements (grep for known fake tokens: "WIRED", "VOGUE", "GQ", "★", "4.9", "10,000+", "guarantee").
+- SaaS output uses workflow/ROI/integration language and no skincare/ritual language; DTC output uses material/formula/ritual and no ROI/dashboard language.
+- Image prompts for SaaS use `interface_ui` / `dashboard_closeup` / `abstract_brand_texture`; DTC uses `product_packshot` / `material_detail`. No nature/mountain/fruit prompts in either.
+- Placeholders are flagged with the badge in the UI.
+
+## Technical notes
+
+- All new modules are server-only (imported from route handlers). No new client dependencies.
+- Structured schemas kept small and constraint-free (no `.min()`/`.max()` bounds, no long enums beyond the fixed unions above) per gateway rules.
+- Strategy generation stays parallel across the 5 families; classification + research + visual brief run once per project and are cached on the project object in local storage.
+- Preview image mapping is a static table in `images.ts` keyed by `(imageMode, category)` → Picsum seed list; deterministic hash chooses within the list. No random scenery.
+- No changes to routes, router config, auth, storage keys, or the gateway fallback chain.
 
 ## Out of scope
 
-- No changes to `src/lib/ai/*` service modules, server routes that call `callLLM/callLLMJson`, or UI.
-- No rotation/removal of `LOVABLE_API_KEY`.
-- No new dependencies.
+Supabase, real image generation, publishing, analytics, collaboration, Shopify API, UI redesign, new pages, framework additions.
