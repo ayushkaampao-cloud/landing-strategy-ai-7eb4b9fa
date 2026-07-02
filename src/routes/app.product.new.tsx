@@ -33,6 +33,8 @@ function NewProduct() {
   const [desiredAngle, setDesiredAngle] = useState("");
   const [projectName, setProjectName] = useState("");
   const [goal, setGoal] = useState<ProjectGoal>("Sell product");
+  const [productImages, setProductImages] = useState<ProductImageRef[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
 
   if (!activeWorkspace) {
     return (
