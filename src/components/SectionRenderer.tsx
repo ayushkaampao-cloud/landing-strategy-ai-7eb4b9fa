@@ -1,7 +1,32 @@
 import type { SectionProps } from "@/types";
 
+function PlaceholderBadge({ section }: { section: SectionProps }) {
+  if (!section.placeholder && !section.proofNeeded) return null;
+  const label = section.placeholder ? "Needs your input" : "Suggested — verify before use";
+  return (
+    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-800 text-[10px] font-medium tracking-wide uppercase mb-3">
+      <span className="size-1.5 rounded-full bg-amber-500" />
+      {label}
+    </div>
+  );
+}
+
 export function SectionRenderer({ section }: { section: SectionProps }) {
   const s = section;
+  const needsBadge = s.placeholder || s.proofNeeded;
+  const content = renderSection(s);
+  if (!needsBadge) return content;
+  return (
+    <div className="relative">
+      <div className="absolute top-3 right-3 z-10">
+        <PlaceholderBadge section={s} />
+      </div>
+      {content}
+    </div>
+  );
+}
+
+function renderSection(s: SectionProps) {
   switch (s.type) {
     case "hero":
       return (
@@ -206,4 +231,6 @@ export function SectionRenderer({ section }: { section: SectionProps }) {
         </section>
       );
   }
+  return null;
 }
+

@@ -15,6 +15,10 @@ export interface LLMOptions {
   temperature?: number;
   maxTokens?: number;
   json?: boolean;
+  /** Optional JSON schema. Passed to Gemini as responseSchema and to
+   *  OpenAI-compatible providers as response_format json_schema. */
+  responseSchema?: Record<string, unknown>;
+  schemaName?: string;
 }
 
 type ProviderName = "gemini_direct" | "lovable_gateway" | "openrouter";
@@ -29,6 +33,7 @@ async function callGeminiDirect(prompt: string, opts: LLMOptions): Promise<strin
       temperature: opts.temperature ?? 0.8,
       ...(opts.maxTokens ? { maxOutputTokens: opts.maxTokens } : {}),
       ...(opts.json ? { responseMimeType: "application/json" } : {}),
+      ...(opts.responseSchema ? { responseSchema: opts.responseSchema } : {}),
     },
   };
   if (opts.system) {
@@ -66,7 +71,18 @@ async function callLovableGateway(prompt: string, opts: LLMOptions): Promise<str
     ],
     temperature: opts.temperature ?? 0.8,
   };
-  if (opts.json) body.response_format = { type: "json_object" };
+  if (opts.responseSchema) {
+    body.response_format = {
+      type: "json_schema",
+      json_schema: {
+        name: opts.schemaName ?? "Output",
+        schema: opts.responseSchema,
+        strict: true,
+      },
+    };
+  } else if (opts.json) {
+    body.response_format = { type: "json_object" };
+  }
 
   const res = await fetch(LOVABLE_GATEWAY_URL, {
     method: "POST",
@@ -104,7 +120,20 @@ async function callOpenRouter(prompt: string, opts: LLMOptions): Promise<string>
         { role: "user", content: prompt },
       ],
       temperature: opts.temperature ?? 0.8,
-      ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+      ...(opts.responseSchema
+        ? {
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: opts.schemaName ?? "Output",
+                schema: opts.responseSchema,
+                strict: true,
+              },
+            },
+          }
+        : opts.json
+          ? { response_format: { type: "json_object" } }
+          : {}),
     }),
   });
   if (!res.ok) {
