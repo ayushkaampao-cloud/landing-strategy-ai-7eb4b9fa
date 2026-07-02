@@ -36,7 +36,7 @@ function ConceptDetail() {
       `# ${concept.conceptName}`,
       `Framework: ${concept.templateFamily}`,
       `Strategy: ${concept.oneLineStrategy}`,
-      `Best for: ${concept.bestTrafficType}`,
+      `Best traffic: ${concept.bestTrafficType}`,
       "",
     ];
     concept.schema.sections.forEach((s, i) => {
@@ -88,6 +88,11 @@ function ConceptDetail() {
     }
   };
 
+  const scrollTo = (id: string) => {
+    const el = document.getElementById(`section-${id}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <>
       <TopBar>
@@ -96,74 +101,12 @@ function ConceptDetail() {
           params={{ projectId }}
           className="mono-tag text-muted-foreground hover:text-foreground"
         >
-          ← Back to gallery
+          ← All 5 concepts
         </Link>
       </TopBar>
-      <div className="grid grid-cols-12 gap-0 min-h-[calc(100vh-56px)]">
-        {/* Strategy rail */}
-        <aside className="col-span-12 lg:col-span-4 xl:col-span-3 border-r border-border bg-surface-muted/40 p-8 lg:sticky lg:top-14 lg:self-start lg:h-[calc(100vh-56px)] lg:overflow-y-auto">
-          <div className="mono-tag text-accent mb-2">{meta.code} · {concept.templateFamily}</div>
-          <h1 className="text-2xl font-semibold tracking-tight mb-3 leading-tight">
-            {concept.conceptName}
-          </h1>
-          <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-            {concept.oneLineStrategy}
-          </p>
-
-          <div className="p-4 bg-surface border border-border rounded-lg mb-6">
-            <div className="mono-tag text-muted-foreground mb-1">Best for</div>
-            <div className="text-sm font-medium">{concept.bestTrafficType}</div>
-            <div className="mono-tag text-muted-foreground mt-3 mb-1">Framework strength</div>
-            <div className="text-sm">{meta.bestFor}</div>
-          </div>
-
-          <div className="mb-6">
-            <div className="mono-tag text-muted-foreground mb-3">Content outline</div>
-            <ol className="space-y-2">
-              {concept.schema.sections.map((s, i) => (
-                <li key={s.id} className="flex gap-3 text-sm">
-                  <span className="mono-tag text-muted-foreground shrink-0 mt-0.5">
-                    0{i + 1}
-                  </span>
-                  <span className="text-foreground">
-                    <span className="block">{s.title ?? capitalize(s.type)}</span>
-                    <span className="mono-tag text-muted-foreground">{s.type}</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div className="space-y-2">
-            <button
-              onClick={() => copy("outline", outlineText())}
-              className="w-full h-9 text-sm font-medium border border-border rounded-md hover:bg-surface"
-            >
-              {copied === "outline" ? "Copied ✓" : "Copy outline text"}
-            </button>
-            <button
-              onClick={() => copy("hero", heroText())}
-              className="w-full h-9 text-sm font-medium border border-border rounded-md hover:bg-surface"
-            >
-              {copied === "hero" ? "Copied ✓" : "Copy hero section"}
-            </button>
-            <button
-              onClick={() => copy("full", fullText())}
-              className="w-full h-9 text-sm font-medium bg-ink text-background rounded-md hover:opacity-90"
-            >
-              {copied === "full" ? "Copied ✓" : "Copy entire page content"}
-            </button>
-            <button
-              onClick={regenerate}
-              className="w-full h-9 text-sm font-medium text-muted-foreground hover:text-foreground"
-            >
-              Regenerate concept
-            </button>
-          </div>
-        </aside>
-
-        {/* Preview surface */}
-        <main className="col-span-12 lg:col-span-8 xl:col-span-9 p-8 bg-surface-muted/50">
+      <div className="grid grid-cols-12 min-h-[calc(100vh-56px)]">
+        {/* Preview surface — LEFT */}
+        <main className="col-span-12 lg:col-span-8 xl:col-span-9 p-6 lg:p-10 bg-surface-muted/50 border-r border-border">
           <div className="max-w-3xl mx-auto bg-surface ring-soft rounded-xl overflow-hidden shadow-elevated">
             <div className="h-9 border-b border-border bg-surface-muted flex items-center px-3 gap-1.5">
               <div className="size-2.5 rounded-full bg-border" />
@@ -172,14 +115,114 @@ function ConceptDetail() {
               <div className="mono-tag text-muted-foreground ml-3 truncate">
                 {product.name.toLowerCase().replace(/\s+/g, "-")}.com
               </div>
+              <div className={`ml-auto mono-tag px-2 py-0.5 rounded ${meta.accentClass.split(" ").filter(c => c.startsWith("text-")).join(" ")} bg-background ring-soft`}>
+                {meta.code}
+              </div>
             </div>
             <div>
               {concept.schema.sections.map((s) => (
-                <SectionRenderer key={s.id} section={s} />
+                <div key={s.id} id={`section-${s.id}`}>
+                  <SectionRenderer section={s} />
+                </div>
               ))}
             </div>
           </div>
         </main>
+
+        {/* Strategy rail — RIGHT */}
+        <aside className="col-span-12 lg:col-span-4 xl:col-span-3 bg-background lg:sticky lg:top-14 lg:self-start lg:h-[calc(100vh-56px)] lg:overflow-y-auto">
+          <div className={`h-1 w-full ${meta.accentDot}`} />
+          <div className="p-7">
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`mono-tag px-2 py-0.5 rounded ring-soft ${meta.accentClass.split(" ").filter(c => c.startsWith("text-")).join(" ")}`}>
+                {meta.code}
+              </span>
+              <span className="mono-tag text-muted-foreground">{meta.length} format</span>
+            </div>
+            <div className="text-xs font-medium text-muted-foreground mb-1">
+              {concept.templateFamily}
+            </div>
+            <h1 className="text-[22px] font-semibold tracking-tight mb-3 leading-tight">
+              {concept.conceptName}
+            </h1>
+            <p className="text-[13px] text-muted-foreground mb-6 leading-relaxed">
+              {concept.oneLineStrategy}
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 mb-6">
+              <div className="p-3 bg-surface border border-border rounded-lg">
+                <div className="mono-tag text-muted-foreground mb-1">Best traffic</div>
+                <div className="text-xs font-medium leading-snug">{concept.bestTrafficType}</div>
+              </div>
+              <div className="p-3 bg-surface border border-border rounded-lg">
+                <div className="mono-tag text-muted-foreground mb-1">Sections</div>
+                <div className="text-xs font-medium">{concept.schema.sections.length} modules</div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-surface-muted/60 border border-border rounded-lg mb-6">
+              <div className="mono-tag text-muted-foreground mb-1">Framework fit</div>
+              <div className="text-[13px] leading-relaxed">{meta.bestFor}</div>
+            </div>
+
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="mono-tag text-muted-foreground">Content outline</div>
+                <div className="mono-tag text-muted-foreground">
+                  {concept.schema.sections.length}
+                </div>
+              </div>
+              <ol className="space-y-0.5">
+                {concept.schema.sections.map((s, i) => (
+                  <li key={s.id}>
+                    <button
+                      onClick={() => scrollTo(s.id)}
+                      className="w-full text-left flex gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-surface-muted group"
+                    >
+                      <span className="mono-tag text-muted-foreground shrink-0 mt-0.5 w-6">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-medium leading-snug truncate group-hover:text-foreground">
+                          {s.title ?? capitalize(s.type)}
+                        </span>
+                        <span className="mono-tag text-muted-foreground">{s.type}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-border">
+              <div className="mono-tag text-muted-foreground mb-1">Copy actions</div>
+              <button
+                onClick={() => copy("outline", outlineText())}
+                className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted"
+              >
+                {copied === "outline" ? "Copied ✓" : "Copy outline"}
+              </button>
+              <button
+                onClick={() => copy("hero", heroText())}
+                className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted"
+              >
+                {copied === "hero" ? "Copied ✓" : "Copy hero"}
+              </button>
+              <button
+                onClick={() => copy("full", fullText())}
+                className="w-full h-9 text-[13px] font-medium bg-ink text-background rounded-md hover:opacity-90"
+              >
+                {copied === "full" ? "Copied ✓" : "Copy full page content"}
+              </button>
+              <button
+                onClick={regenerate}
+                className="w-full h-9 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                ↻ Regenerate this concept
+              </button>
+            </div>
+          </div>
+        </aside>
       </div>
     </>
   );

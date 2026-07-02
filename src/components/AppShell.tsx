@@ -28,7 +28,7 @@ function NavLink({
 }
 
 function Sidebar() {
-  const { activeWorkspace, user, signOut } = useStore();
+  const { activeWorkspace, workspaces, setActiveWorkspace, user, signOut } = useStore();
   const navigate = useNavigate();
   return (
     <aside className="w-60 border-r border-border bg-surface-muted/40 flex flex-col p-4 shrink-0">
@@ -41,10 +41,30 @@ function Sidebar() {
       </div>
 
       <div className="mb-6 px-2">
-        <div className="mono-tag text-muted-foreground mb-1">Workspace</div>
-        <div className="text-sm font-medium truncate">
-          {activeWorkspace?.name ?? "No brand yet"}
-        </div>
+        <div className="mono-tag text-muted-foreground mb-2">Workspace</div>
+        {workspaces.length > 1 ? (
+          <select
+            value={activeWorkspace?.id ?? ""}
+            onChange={(e) => setActiveWorkspace(e.target.value)}
+            className="w-full text-sm font-medium bg-surface border border-border rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-ring/40"
+          >
+            {workspaces.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="text-sm font-medium truncate">
+            {activeWorkspace?.name ?? "No brand yet"}
+          </div>
+        )}
+        <Link
+          to="/app/brand/new"
+          className="mono-tag text-muted-foreground hover:text-foreground mt-2 inline-block"
+        >
+          + New brand
+        </Link>
       </div>
 
       <nav className="space-y-1 flex-1">

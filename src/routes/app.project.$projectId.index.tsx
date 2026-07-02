@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
-import { FRAMEWORK_META } from "@/lib/generator";
+import { FRAMEWORK_META, TEMPLATE_FAMILIES } from "@/lib/generator";
 
 export const Route = createFileRoute("/app/project/$projectId/")({
   component: ProjectGallery,
@@ -29,7 +29,7 @@ function ProjectGallery() {
         <TopBar>
           <span className="mono-tag text-muted-foreground">{project.goal}</span>
         </TopBar>
-        <div className="p-8 max-w-3xl">
+        <div className="p-8 max-w-4xl">
           <div className="mono-tag text-muted-foreground mb-2">Project</div>
           <h1 className="text-3xl font-semibold tracking-tight mb-1">
             {project.projectName}
@@ -40,14 +40,31 @@ function ProjectGallery() {
 
           <div className="p-10 bg-surface border border-border rounded-xl">
             <div className="mono-tag text-accent mb-3">Ready to generate</div>
-            <h2 className="text-xl font-semibold tracking-tight mb-2">
-              Five distinct landing page strategies for {product?.name}
+            <h2 className="text-2xl font-semibold tracking-tight mb-3">
+              Five distinct strategies for {product?.name}
             </h2>
-            <p className="text-sm text-muted-foreground mb-6 leading-relaxed max-w-lg">
-              We'll build one concept per framework — Performance, A+ Product Story,
-              Deep Conversion, Brand Story, and Trust & Comparison — each with a
-              full section-level schema you can read, copy, and ship.
+            <p className="text-sm text-muted-foreground mb-8 leading-relaxed max-w-lg">
+              We'll draft one full landing page per framework — different structure,
+              tone, and section order. Read them side-by-side, copy the winner,
+              or regenerate any concept in place.
             </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-8">
+              {TEMPLATE_FAMILIES.map((f) => {
+                const m = FRAMEWORK_META[f];
+                return (
+                  <div key={f} className="p-3 bg-surface-muted/60 border border-border rounded-lg">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className={`size-1.5 rounded-full ${m.accentDot}`} />
+                      <span className="mono-tag text-muted-foreground">{m.code}</span>
+                    </div>
+                    <div className="text-[13px] font-medium leading-snug mb-1">{f}</div>
+                    <div className="mono-tag text-muted-foreground">{m.length}</div>
+                  </div>
+                );
+              })}
+            </div>
+
             <Link
               to="/app/project/$projectId/generating"
               params={{ projectId }}
@@ -61,6 +78,13 @@ function ProjectGallery() {
     );
   }
 
+  // Order concepts by canonical framework order
+  const ordered = [...projectConcepts].sort(
+    (a, b) =>
+      TEMPLATE_FAMILIES.indexOf(a.templateFamily) -
+      TEMPLATE_FAMILIES.indexOf(b.templateFamily),
+  );
+
   return (
     <>
       <TopBar>
@@ -72,11 +96,11 @@ function ProjectGallery() {
           {project.projectName}
         </h1>
         <p className="text-muted-foreground text-sm mb-10">
-          {product?.name} · 5 strategic directions
+          {product?.name} · 5 strategic directions · {ordered.reduce((n, c) => n + c.schema.sections.length, 0)} sections total
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {projectConcepts.map((c) => {
+          {ordered.map((c) => {
             const meta = FRAMEWORK_META[c.templateFamily];
             const hero = c.schema.sections.find((s) => s.type === "hero");
             return (
@@ -84,48 +108,58 @@ function ProjectGallery() {
                 key={c.id}
                 to="/app/project/$projectId/concept/$conceptId"
                 params={{ projectId, conceptId: c.id }}
-                className="group block bg-surface border border-border rounded-xl p-1 hover:border-foreground/30 transition-all"
+                className="group block bg-surface border border-border rounded-xl overflow-hidden hover:border-foreground/30 transition-all hover:shadow-elevated"
               >
-                <div className="p-4">
+                {/* Family accent band */}
+                <div className={`h-1 ${meta.accentDot}`} />
+
+                <div className="p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="mono-tag bg-ink text-background px-2 py-0.5 rounded">
-                      {meta.code}
+                    <span className={`mono-tag px-2 py-0.5 rounded ring-soft bg-background ${meta.accentClass.split(" ").filter(x => x.startsWith("text-")).join(" ")}`}>
+                      {meta.code} · {meta.length}
                     </span>
-                    <span className="mono-tag text-accent">{c.bestTrafficType}</span>
+                    <span className="mono-tag text-muted-foreground">
+                      {c.schema.sections.length} sections
+                    </span>
                   </div>
                   <div className="mono-tag text-muted-foreground mb-1">
                     {c.templateFamily}
                   </div>
-                  <h3 className="font-semibold mb-2">{c.conceptName}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4 line-clamp-2">
+                  <h3 className="font-semibold text-[15px] leading-snug mb-2 line-clamp-1">
+                    {c.conceptName}
+                  </h3>
+                  <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-3 min-h-[3.6em]">
                     {c.oneLineStrategy}
                   </p>
                 </div>
-                {/* Mini hero preview */}
-                <div className="rounded-lg bg-surface-muted p-5 m-1 ring-soft min-h-[140px]">
+
+                {/* Hero preview snapshot */}
+                <div className={`mx-4 mb-4 rounded-lg p-4 ring-soft bg-gradient-to-br ${meta.accentClass} min-h-[150px] flex flex-col justify-between`}>
                   {hero && (
                     <>
-                      {hero.highlight && (
-                        <div className="mono-tag text-muted-foreground mb-1.5">
-                          {hero.highlight}
+                      <div>
+                        {hero.highlight && (
+                          <div className="mono-tag mb-1.5 opacity-70">
+                            {hero.highlight}
+                          </div>
+                        )}
+                        <div className="text-[13px] font-semibold leading-snug text-foreground line-clamp-3">
+                          {hero.title}
                         </div>
-                      )}
-                      <div className="text-sm font-semibold leading-snug mb-2 line-clamp-2">
-                        {hero.title}
+                        {hero.subtitle && (
+                          <div className="text-[11px] text-muted-foreground line-clamp-2 mt-1.5 leading-snug">
+                            {hero.subtitle}
+                          </div>
+                        )}
                       </div>
-                      {hero.subtitle && (
-                        <div className="text-[11px] text-muted-foreground line-clamp-2">
-                          {hero.subtitle}
-                        </div>
-                      )}
                       <div className="flex gap-1.5 mt-3">
                         {hero.ctaLabel && (
-                          <span className="text-[10px] px-2 py-1 bg-ink text-background rounded">
+                          <span className="text-[10px] px-2 py-1 bg-ink text-background rounded font-medium">
                             {hero.ctaLabel}
                           </span>
                         )}
                         {hero.ctaSecondaryLabel && (
-                          <span className="text-[10px] px-2 py-1 border border-border rounded">
+                          <span className="text-[10px] px-2 py-1 border border-border rounded bg-background/60">
                             {hero.ctaSecondaryLabel}
                           </span>
                         )}
@@ -133,9 +167,15 @@ function ProjectGallery() {
                     </>
                   )}
                 </div>
-                <div className="p-4 flex items-center justify-between">
-                  <span className="mono-tag text-muted-foreground">View concept</span>
-                  <span className="text-sm text-accent group-hover:translate-x-0.5 transition-transform">
+
+                <div className="px-5 pb-5 pt-3 border-t border-border flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="mono-tag text-muted-foreground mb-1">Best for</div>
+                    <div className="text-[12px] leading-snug line-clamp-2">
+                      {meta.bestFor}
+                    </div>
+                  </div>
+                  <span className={`text-sm shrink-0 mt-4 ${meta.accentClass.split(" ").filter(x => x.startsWith("text-")).join(" ")} group-hover:translate-x-0.5 transition-transform`}>
                     →
                   </span>
                 </div>
