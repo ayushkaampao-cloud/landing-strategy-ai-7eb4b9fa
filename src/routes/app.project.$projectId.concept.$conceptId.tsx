@@ -142,14 +142,14 @@ function ConceptDetail() {
         body: JSON.stringify({
           concept,
           workspace: {
-            name: workspace.name,
-            brandDescription: workspace.brandDescription,
-            primaryAudience: workspace.primaryAudience,
+            name: workspace!.name,
+            brandDescription: workspace!.brandDescription,
+            primaryAudience: workspace!.primaryAudience,
           },
           product: {
-            name: product.name,
-            shortDescription: product.shortDescription,
-            priceInfo: product.priceInfo,
+            name: product!.name,
+            shortDescription: product!.shortDescription,
+            priceInfo: product!.priceInfo,
           },
         }),
       });
@@ -189,8 +189,8 @@ function ConceptDetail() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          projectName: project.projectName,
-          conceptName: concept.conceptName,
+          projectName: project!.projectName,
+          conceptName: concept!.conceptName,
           items,
         }),
       });
