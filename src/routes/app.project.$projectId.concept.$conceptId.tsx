@@ -315,6 +315,7 @@ function ConceptDetail() {
   return (
     <>
       <TopBar>
+        <GroundingBadge count={productImages.length} hasProfile={!!visualProfile} />
         <Link
           to="/app/project/$projectId"
           params={{ projectId }}
