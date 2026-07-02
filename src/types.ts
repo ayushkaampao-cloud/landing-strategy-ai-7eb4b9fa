@@ -79,6 +79,47 @@ export type SectionType =
   | "cta"
   | "details";
 
+export type ProjectCategory =
+  | "b2b_saas"
+  | "finance_software"
+  | "dtc_physical_product"
+  | "beauty_skincare"
+  | "service_consulting"
+  | "hardware_device"
+  | "food_beverage"
+  | "other";
+
+export type AudienceSophistication = "beginner" | "intermediate" | "expert";
+export type AwarenessLevel =
+  | "unaware"
+  | "problem_aware"
+  | "solution_aware"
+  | "product_aware"
+  | "most_aware";
+
+export interface ProjectClassification {
+  category: ProjectCategory;
+  subcategory: string;
+  audienceSophistication: AudienceSophistication;
+  awarenessLevel: AwarenessLevel;
+  toneSummary: string;
+}
+
+export type ImageMode =
+  | "product_packshot"
+  | "product_in_use"
+  | "interface_ui"
+  | "dashboard_closeup"
+  | "comparison_graphic"
+  | "founder_story_editorial"
+  | "ingredient_macro"
+  | "material_detail"
+  | "iconographic_brand_visual"
+  | "abstract_brand_texture"
+  | "quote_card_visual"
+  | "data_visual_support"
+  | "no_image_needed";
+
 export interface SectionProps {
   id: string;
   type: SectionType;
@@ -90,13 +131,17 @@ export interface SectionProps {
   ctaLabel?: string;
   ctaSecondaryLabel?: string;
   items?: { title: string; body: string }[];
-  // New agentic fields
+  // Agentic fields
   headline?: string;
   subheadline?: string;
   notes?: string;
   imagePrompt?: string;
   imageStyle?: string;
+  imageMode?: ImageMode;
   imageUrl?: string;
+  negativePrompt?: string;
+  proofNeeded?: boolean;
+  placeholder?: boolean;
 }
 
 export interface LandingPageSchema {
@@ -114,11 +159,15 @@ export interface ProjectResearch {
   keywords: string[];
   objections: string[];
   trustSignals: string[];
+  trustSignalsNeeded?: string[];
   positioningIdeas: string[];
   imageStyleHints: string[];
   toneSummary: string;
   createdAt: string;
   note?: string;
+  classification?: ProjectClassification;
+  verifiedFacts?: string[];
+  forbiddenClaims?: string[];
 }
 
 export interface LandingPageConcept {
@@ -145,6 +194,7 @@ export interface LandingPageElementsHero {
   secondaryCTA?: string;
   imagePrompts: string[];
   visualDirection: string;
+  placeholder?: boolean;
 }
 
 export interface LandingPageElementsSection {
@@ -156,8 +206,12 @@ export interface LandingPageElementsSection {
   bullets?: string[];
   cta?: string;
   imagePrompts: string[];
+  imageMode?: ImageMode;
+  negativePrompt?: string;
   visualDirection?: string;
   implementationNote?: string;
+  proofNeeded?: boolean;
+  placeholder?: boolean;
 }
 
 export interface LandingPageElements {
@@ -170,9 +224,26 @@ export interface LandingPageElements {
     colorMood: string;
     typographyMood: string;
     layoutMood: string;
+    brandSignalKeywords?: string[];
   };
   copyExportText: string;
   createdAt: string;
+}
+
+export interface VisualIdentityBrief {
+  brandName: string;
+  category: ProjectCategory;
+  productType: string;
+  visualIntent: string;
+  preferredImageModes: ImageMode[];
+  forbiddenImageModes: ImageMode[];
+  sceneSuggestions: string[];
+  productPresentationStyle: string;
+  environmentStyle: string;
+  lightingStyle: string;
+  compositionStyle: string;
+  paletteHints: string[];
+  realismLevel: string;
 }
 
 export interface GeneratedImagePreview {
@@ -181,6 +252,8 @@ export interface GeneratedImagePreview {
   imageStyle: string;
   previewUrl: string;
   status: "simulated" | "generated";
+  imageMode?: ImageMode;
+  category?: ProjectCategory;
 }
 
 export interface GenerationRun {
