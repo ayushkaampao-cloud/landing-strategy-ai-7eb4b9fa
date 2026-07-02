@@ -1,23 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router";
-import type { GeneratedImagePreview } from "@/types";
+import { previewUrlFor } from "@/lib/ai/prompts";
+import type { GeneratedImagePreview, ImageMode, ProjectCategory } from "@/types";
 
 interface Body {
   projectName: string;
   conceptName: string;
+  category?: ProjectCategory;
   items: {
     sectionId: string;
     imagePrompt: string;
     imageStyle?: string;
+    imageMode?: ImageMode;
   }[];
 }
 
-function hashSeed(str: string): string {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = (h << 5) - h + str.charCodeAt(i);
-    h |= 0;
+// Fallback inference: pull the imageMode out of the "[mode] ..." prefix the
+// elements route embeds into every prompt. This keeps previews correct even
+// when older clients don't forward imageMode explicitly.
+function inferMode(prompt: string): ImageMode {
+  const m = prompt.match(/^\[([a-z_]+)\]/i);
+  if (m) {
+    const candidate = m[1] as ImageMode;
+    return candidate;
   }
-  return `${Math.abs(h)}`;
+  return "abstract_brand_texture";
 }
 
 export const Route = createFileRoute("/api/generate-images")({
@@ -31,15 +37,16 @@ export const Route = createFileRoute("/api/generate-images")({
           return new Response("Invalid JSON", { status: 400 });
         }
         const previews: GeneratedImagePreview[] = (body.items ?? []).map((item) => {
-          const seed = hashSeed(
-            `${body.projectName}|${body.conceptName}|${item.sectionId}|${item.imagePrompt}`,
-          );
+          const mode: ImageMode = item.imageMode ?? inferMode(item.imagePrompt);
+          const seedKey = `${body.projectName}|${body.conceptName}|${item.sectionId}|${mode}|${item.imagePrompt}`;
           return {
             sectionId: item.sectionId,
             imagePrompt: item.imagePrompt,
             imageStyle: item.imageStyle ?? "",
-            previewUrl: `https://picsum.photos/seed/${seed}/1200/800`,
+            previewUrl: previewUrlFor(mode, seedKey),
             status: "simulated",
+            imageMode: mode,
+            category: body.category,
           };
         });
         return Response.json({ previews });
