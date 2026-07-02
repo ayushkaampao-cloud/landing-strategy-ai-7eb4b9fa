@@ -2,15 +2,34 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, TEMPLATE_FAMILIES } from "@/lib/generator";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/projects")({
   component: ProjectsList,
 });
 
 function ProjectsList() {
-  const { projects, products, concepts, workspaces, activeWorkspace, setActiveWorkspace } = useStore();
+  const { projects, products, concepts, workspaces, activeWorkspace, setActiveWorkspace, deleteProject, deleteWorkspace } = useStore();
   const wsProjects = projects.filter((p) => p.workspaceId === activeWorkspace?.id);
   const otherWorkspaces = workspaces.filter((w) => w.id !== activeWorkspace?.id && projects.some((p) => p.workspaceId === w.id));
+
+  const onDeleteProject = (id: string, name: string) => {
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    deleteProject(id);
+    toast.success("Project deleted");
+  };
+  const onDeleteBrand = () => {
+    if (!activeWorkspace) return;
+    if (
+      !window.confirm(
+        `Delete brand "${activeWorkspace.name}" and all its projects? This cannot be undone.`,
+      )
+    )
+      return;
+    deleteWorkspace(activeWorkspace.id);
+    toast.success("Brand deleted");
+  };
 
   return (
     <>
