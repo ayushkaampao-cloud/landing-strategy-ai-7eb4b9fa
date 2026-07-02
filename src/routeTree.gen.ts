@@ -22,6 +22,7 @@ import { Route as ApiGenerateImagesRouteImport } from './routes/api/generate-ima
 import { Route as ApiGenerateElementsRouteImport } from './routes/api/generate-elements'
 import { Route as ApiDebugLlmRouteImport } from './routes/api/debug-llm'
 import { Route as ApiClassifyProjectRouteImport } from './routes/api/classify-project'
+import { Route as ApiAnalyzeProductImagesRouteImport } from './routes/api/analyze-product-images'
 import { Route as AppProductNewRouteImport } from './routes/app.product.new'
 import { Route as AppBrandNewRouteImport } from './routes/app.brand.new'
 import { Route as AppProjectProjectIdIndexRouteImport } from './routes/app.project.$projectId.index'
@@ -93,6 +94,11 @@ const ApiClassifyProjectRoute = ApiClassifyProjectRouteImport.update({
   path: '/api/classify-project',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAnalyzeProductImagesRoute = ApiAnalyzeProductImagesRouteImport.update({
+  id: '/api/analyze-product-images',
+  path: '/api/analyze-product-images',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppProductNewRoute = AppProductNewRouteImport.update({
   id: '/product/new',
   path: '/product/new',
@@ -126,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/api/analyze-product-images': typeof ApiAnalyzeProductImagesRoute
   '/api/classify-project': typeof ApiClassifyProjectRoute
   '/api/debug-llm': typeof ApiDebugLlmRoute
   '/api/generate-elements': typeof ApiGenerateElementsRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/api/analyze-product-images': typeof ApiAnalyzeProductImagesRoute
   '/api/classify-project': typeof ApiClassifyProjectRoute
   '/api/debug-llm': typeof ApiDebugLlmRoute
   '/api/generate-elements': typeof ApiGenerateElementsRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/api/analyze-product-images': typeof ApiAnalyzeProductImagesRoute
   '/api/classify-project': typeof ApiClassifyProjectRoute
   '/api/debug-llm': typeof ApiDebugLlmRoute
   '/api/generate-elements': typeof ApiGenerateElementsRoute
@@ -188,6 +197,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/api/analyze-product-images'
     | '/api/classify-project'
     | '/api/debug-llm'
     | '/api/generate-elements'
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/api/analyze-product-images'
     | '/api/classify-project'
     | '/api/debug-llm'
     | '/api/generate-elements'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/api/analyze-product-images'
     | '/api/classify-project'
     | '/api/debug-llm'
     | '/api/generate-elements'
@@ -248,6 +260,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiAnalyzeProductImagesRoute: typeof ApiAnalyzeProductImagesRoute
   ApiClassifyProjectRoute: typeof ApiClassifyProjectRoute
   ApiDebugLlmRoute: typeof ApiDebugLlmRoute
   ApiGenerateElementsRoute: typeof ApiGenerateElementsRoute
@@ -349,6 +362,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiClassifyProjectRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/analyze-product-images': {
+      id: '/api/analyze-product-images'
+      path: '/api/analyze-product-images'
+      fullPath: '/api/analyze-product-images'
+      preLoaderRoute: typeof ApiAnalyzeProductImagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/product/new': {
       id: '/app/product/new'
       path: '/product/new'
@@ -418,6 +438,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiAnalyzeProductImagesRoute: ApiAnalyzeProductImagesRoute,
   ApiClassifyProjectRoute: ApiClassifyProjectRoute,
   ApiDebugLlmRoute: ApiDebugLlmRoute,
   ApiGenerateElementsRoute: ApiGenerateElementsRoute,
@@ -428,13 +449,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

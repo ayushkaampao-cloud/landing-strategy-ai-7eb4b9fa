@@ -12,6 +12,8 @@ import type {
   LandingPageConcept,
   LandingPageElements,
   Product,
+  ProductImageRef,
+  ProductVisualProfile,
   Project,
   ProjectResearch,
   User,
@@ -69,6 +71,8 @@ interface StoreContextValue extends AppData {
     input: Omit<Project, "id" | "createdAt">,
   ) => Project;
   saveConcepts: (projectId: string, concepts: LandingPageConcept[]) => void;
+  deleteProject: (projectId: string) => void;
+  deleteWorkspace: (workspaceId: string) => void;
   activeWorkspace: Workspace | null;
   // Research / elements / images (persisted via storage helper)
   getResearch: (projectId: string) => ProjectResearch | null;
@@ -77,6 +81,10 @@ interface StoreContextValue extends AppData {
   saveElements: (conceptId: string, e: LandingPageElements) => void;
   getImages: (conceptId: string) => GeneratedImagePreview[];
   saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => void;
+  getProductImages: (projectId: string) => ProductImageRef[];
+  saveProductImages: (projectId: string, imgs: ProductImageRef[]) => void;
+  getVisualProfile: (projectId: string) => ProductVisualProfile | null;
+  saveVisualProfile: (projectId: string, p: ProductVisualProfile | null) => void;
   // For dashboard status
   version: number;
 }
@@ -180,6 +188,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const deleteProject = useCallback((projectId: string) => {
+    setData((d) => {
+      const conceptIds = d.concepts.filter((c) => c.projectId === projectId).map((c) => c.id);
+      conceptIds.forEach((id) => storage.clearConcept(id));
+      storage.clearProject(projectId);
+      return {
+        ...d,
+        projects: d.projects.filter((p) => p.id !== projectId),
+        concepts: d.concepts.filter((c) => c.projectId !== projectId),
+      };
+    });
+  }, []);
+
+  const deleteWorkspace = useCallback((workspaceId: string) => {
+    setData((d) => {
+      const projs = d.projects.filter((p) => p.workspaceId === workspaceId);
+      projs.forEach((p) => {
+        const conceptIds = d.concepts.filter((c) => c.projectId === p.id).map((c) => c.id);
+        conceptIds.forEach((id) => storage.clearConcept(id));
+        storage.clearProject(p.id);
+      });
+      const remaining = d.workspaces.filter((w) => w.id !== workspaceId);
+      return {
+        ...d,
+        workspaces: remaining,
+        products: d.products.filter((pr) => pr.workspaceId !== workspaceId),
+        projects: d.projects.filter((p) => p.workspaceId !== workspaceId),
+        concepts: d.concepts.filter(
+          (c) => !projs.some((p) => p.id === c.projectId),
+        ),
+        activeWorkspaceId:
+          d.activeWorkspaceId === workspaceId
+            ? remaining[0]?.id ?? null
+            : d.activeWorkspaceId,
+      };
+    });
+  }, []);
+
   const activeWorkspace = useMemo(
     () => data.workspaces.find((w) => w.id === data.activeWorkspaceId) ?? null,
     [data.workspaces, data.activeWorkspaceId],
@@ -198,6 +244,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     createProduct,
     createProject,
     saveConcepts,
+    deleteProject,
+    deleteWorkspace,
     version,
     getResearch: (id) => storage.loadResearch(id),
     saveResearch: (id, r) => {
@@ -212,6 +260,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     getImages: (id) => storage.loadImages(id),
     saveImages: (id, imgs) => {
       storage.saveImages(id, imgs);
+      bump();
+    },
+    getProductImages: (id) => storage.loadProductImages(id),
+    saveProductImages: (id, imgs) => {
+      storage.saveProductImages(id, imgs);
+      bump();
+    },
+    getVisualProfile: (id) => storage.loadVisualProfile(id),
+    saveVisualProfile: (id, p) => {
+      storage.saveVisualProfile(id, p);
       bump();
     },
   };

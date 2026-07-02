@@ -1,6 +1,32 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useStore } from "@/lib/store";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Moon, Sun } from "lucide-react";
+
+function ThemeToggle() {
+  const [dark, setDark] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const stored = window.localStorage.getItem("lpai:theme");
+    if (stored) return stored === "dark";
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+  });
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.classList.toggle("dark", dark);
+    window.localStorage.setItem("lpai:theme", dark ? "dark" : "light");
+  }, [dark]);
+  return (
+    <button
+      type="button"
+      onClick={() => setDark((d) => !d)}
+      className="inline-flex items-center justify-center size-8 rounded-md border border-border bg-surface hover:bg-surface-muted transition-colors"
+      title={dark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label="Toggle theme"
+    >
+      {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+    </button>
+  );
+}
 
 function NavLink({
   to,
@@ -105,7 +131,10 @@ export function TopBar({ children }: { children?: ReactNode }) {
       <div className="flex items-center gap-2 text-xs">
         <span className="mono-tag text-muted-foreground">{activeWorkspace?.name ?? "Workspace"}</span>
       </div>
-      <div className="flex items-center gap-3">{children}</div>
+      <div className="flex items-center gap-3">
+        {children}
+        <ThemeToggle />
+      </div>
     </header>
   );
 }

@@ -3,7 +3,10 @@ import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, generateConceptsForProject } from "@/lib/generator";
 import { SectionRenderer } from "@/components/SectionRenderer";
+import { GroundingBadge } from "@/components/GroundingBadge";
+import { generateRealImage } from "@/lib/puter";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { GeneratedImagePreview, LandingPageElements } from "@/types";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
@@ -23,6 +26,8 @@ function ConceptDetail() {
     saveElements,
     getImages,
     saveImages,
+    getProductImages,
+    getVisualProfile,
   } = useStore();
   const navigate = useNavigate();
   const [copied, setCopied] = useState<string | null>(null);
@@ -33,6 +38,7 @@ function ConceptDetail() {
   const [imagesError, setImagesError] = useState<string | null>(null);
   const [elementsVersion, setElementsVersion] = useState(0);
   const [imagesVersion, setImagesVersion] = useState(0);
+  const [realGenerating, setRealGenerating] = useState<Record<string, boolean>>({});
 
 
   const project = projects.find((p) => p.id === projectId);
@@ -192,6 +198,40 @@ function ConceptDetail() {
     return map;
   }, [images]);
 
+  const productImages = getProductImages(projectId);
+  const visualProfile = getVisualProfile(projectId);
+
+  async function handleGenerateRealImage(sectionId: string) {
+    const img = imageBySection[sectionId];
+    if (!img) return;
+    setRealGenerating((s) => ({ ...s, [sectionId]: true }));
+    try {
+      const url = await generateRealImage({
+        prompt: img.imagePrompt,
+        negativePrompt: concept?.schema.sections.find((s) => s.id === sectionId)?.negativePrompt,
+        imageMode: img.imageMode,
+        visualProfile,
+        referenceImages: productImages,
+      });
+      const next = images.map((i) =>
+        i.sectionId === sectionId ? { ...i, realUrl: url, status: "real" as const } : i,
+      );
+      saveImages(conceptId, next);
+      setImagesVersion((v) => v + 1);
+      toast.success("Real image generated");
+    } catch (err) {
+      const next = images.map((i) =>
+        i.sectionId === sectionId ? { ...i, status: "failed" as const } : i,
+      );
+      saveImages(conceptId, next);
+      setImagesVersion((v) => v + 1);
+      toast.error(`Image generation failed: ${(err as Error).message}`);
+    } finally {
+      setRealGenerating((s) => ({ ...s, [sectionId]: false }));
+    }
+  }
+
+
   async function handleGenerateElements() {
     setElementsLoading(true);
     setElementsError(null);
@@ -275,6 +315,7 @@ function ConceptDetail() {
   return (
     <>
       <TopBar>
+        <GroundingBadge count={productImages.length} hasProfile={!!visualProfile} />
         <Link
           to="/app/project/$projectId"
           params={{ projectId }}
@@ -307,15 +348,44 @@ function ConceptDetail() {
                     {img && (
                       <div className="px-10 pb-10 -mt-6">
                         <div className="rounded-lg overflow-hidden ring-soft">
-                          <img
-                            src={img.previewUrl}
-                            alt="Section preview"
-                            className="w-full h-auto block"
-                            loading="lazy"
-                          />
-                          <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground">
-                            <span className="mono-tag">Preview image · Simulated</span>
-                            <span className="truncate max-w-[60%]">{img.imagePrompt}</span>
+                          <div className="relative">
+                            <img
+                              src={img.realUrl ?? img.previewUrl}
+                              alt="Section preview"
+                              className={`w-full h-auto block ${realGenerating[s.id] ? "opacity-60" : ""}`}
+                              loading="lazy"
+                            />
+                            {realGenerating[s.id] && (
+                              <div className="absolute inset-0 grid place-items-center bg-background/40">
+                                <span className="mono-tag px-2 py-1 rounded bg-background/80 ring-soft">
+                                  Generating…
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground gap-2">
+                            <span className="mono-tag">
+                              {img.status === "real"
+                                ? "Real image · AI-generated"
+                                : img.status === "failed"
+                                  ? "Generation failed — using placeholder"
+                                  : "Preview image · Simulated"}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {img.status !== "real" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleGenerateRealImage(s.id)}
+                                  disabled={!!realGenerating[s.id]}
+                                  className="mono-tag px-2 py-0.5 rounded bg-ink text-background hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {realGenerating[s.id] ? "Generating…" : "Generate real image"}
+                                </button>
+                              )}
+                              <span className="truncate max-w-[40%]" title={img.imagePrompt}>
+                                {img.imagePrompt}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>

@@ -2,15 +2,34 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, TEMPLATE_FAMILIES } from "@/lib/generator";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/projects")({
   component: ProjectsList,
 });
 
 function ProjectsList() {
-  const { projects, products, concepts, workspaces, activeWorkspace, setActiveWorkspace } = useStore();
+  const { projects, products, concepts, workspaces, activeWorkspace, setActiveWorkspace, deleteProject, deleteWorkspace } = useStore();
   const wsProjects = projects.filter((p) => p.workspaceId === activeWorkspace?.id);
   const otherWorkspaces = workspaces.filter((w) => w.id !== activeWorkspace?.id && projects.some((p) => p.workspaceId === w.id));
+
+  const onDeleteProject = (id: string, name: string) => {
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    deleteProject(id);
+    toast.success("Project deleted");
+  };
+  const onDeleteBrand = () => {
+    if (!activeWorkspace) return;
+    if (
+      !window.confirm(
+        `Delete brand "${activeWorkspace.name}" and all its projects? This cannot be undone.`,
+      )
+    )
+      return;
+    deleteWorkspace(activeWorkspace.id);
+    toast.success("Brand deleted");
+  };
 
   return (
     <>
@@ -31,8 +50,18 @@ function ProjectsList() {
             </p>
           </div>
           {activeWorkspace && (
-            <div className="mono-tag text-muted-foreground">
-              {activeWorkspace.name} · {wsProjects.length} project{wsProjects.length === 1 ? "" : "s"}
+            <div className="flex items-center gap-3">
+              <div className="mono-tag text-muted-foreground">
+                {activeWorkspace.name} · {wsProjects.length} project{wsProjects.length === 1 ? "" : "s"}
+              </div>
+              <button
+                type="button"
+                onClick={onDeleteBrand}
+                className="mono-tag text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
+                title="Delete brand and all its projects"
+              >
+                <Trash2 className="size-3" /> Delete brand
+              </button>
             </div>
           )}
         </div>
@@ -58,55 +87,72 @@ function ProjectsList() {
               const projectConcepts = concepts.filter((c) => c.projectId === p.id);
               const generated = projectConcepts.length > 0;
               return (
-                <Link
+                <div
                   key={p.id}
-                  to="/app/project/$projectId"
-                  params={{ projectId: p.id }}
-                  className="block p-5 bg-surface border border-border rounded-xl hover:border-foreground/30 hover:shadow-elevated transition-all"
+                  className="group relative p-5 bg-surface border border-border rounded-xl hover:border-foreground/30 hover:shadow-elevated transition-all"
                 >
-                  <div className="flex items-start justify-between gap-6">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="mono-tag text-muted-foreground">{p.goal}</span>
-                        <span
-                          className={`mono-tag px-2 py-0.5 rounded ${
-                            generated
-                              ? "bg-accent/10 text-accent"
-                              : "bg-surface-muted text-muted-foreground ring-soft"
-                          }`}
-                        >
-                          {generated ? "Generated" : "Not generated"}
-                        </span>
-                      </div>
-                      <div className="font-semibold text-[15px] mb-0.5">{p.projectName}</div>
-                      <div className="text-sm text-muted-foreground truncate">
-                        {product?.name}
-                        {product?.shortDescription && (
-                          <> · <span className="text-muted-foreground/70">{product.shortDescription}</span></>
-                        )}
-                      </div>
-                    </div>
-                    <div className="shrink-0 flex items-center gap-3">
-                      {generated ? (
-                        <div className="flex -space-x-1">
-                          {TEMPLATE_FAMILIES.map((f) => {
-                            const m = FRAMEWORK_META[f];
-                            return (
-                              <span
-                                key={f}
-                                title={f}
-                                className={`size-6 rounded-full ${m.accentDot} ring-2 ring-background`}
-                              />
-                            );
-                          })}
+                  <Link
+                    to="/app/project/$projectId"
+                    params={{ projectId: p.id }}
+                    className="block"
+                  >
+                    <div className="flex items-start justify-between gap-6">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="mono-tag text-muted-foreground">{p.goal}</span>
+                          <span
+                            className={`mono-tag px-2 py-0.5 rounded ${
+                              generated
+                                ? "bg-accent/10 text-accent"
+                                : "bg-surface-muted text-muted-foreground ring-soft"
+                            }`}
+                          >
+                            {generated ? "Generated" : "Not generated"}
+                          </span>
                         </div>
-                      ) : (
-                        <span className="mono-tag text-muted-foreground">Ready to generate →</span>
-                      )}
-                      <span className="text-muted-foreground">→</span>
+                        <div className="font-semibold text-[15px] mb-0.5">{p.projectName}</div>
+                        <div className="text-sm text-muted-foreground truncate">
+                          {product?.name}
+                          {product?.shortDescription && (
+                            <> · <span className="text-muted-foreground/70">{product.shortDescription}</span></>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-3">
+                        {generated ? (
+                          <div className="flex -space-x-1">
+                            {TEMPLATE_FAMILIES.map((f) => {
+                              const m = FRAMEWORK_META[f];
+                              return (
+                                <span
+                                  key={f}
+                                  title={f}
+                                  className={`size-6 rounded-full ${m.accentDot} ring-2 ring-background`}
+                                />
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <span className="mono-tag text-muted-foreground">Ready to generate →</span>
+                        )}
+                        <span className="text-muted-foreground">→</span>
+                      </div>
                     </div>
-                  </div>
-                </Link>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onDeleteProject(p.id, p.projectName);
+                    }}
+                    className="absolute top-3 right-3 size-8 rounded-md grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Delete project"
+                    title="Delete project"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
               );
             })}
           </div>

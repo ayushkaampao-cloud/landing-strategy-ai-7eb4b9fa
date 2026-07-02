@@ -1,88 +1,123 @@
-# Landing Page AI — Intelligence Upgrade Plan
+# Landing Page AI 1.0 — Final Consolidated Upgrade
 
-Scope: content + image intelligence only. No UI redesign, no route changes, no Supabase, no publishing. Existing gateway fallback chain (Gemini direct → Lovable Gateway → OpenRouter) stays untouched.
+Five-part upgrade layered on top of the existing pipeline. The classify → research → strategies → elements → images chain, the Gemini/Lovable/OpenRouter fallback, localStorage persistence, and the five framework families stay intact.
 
-## 1. Gateway: add structured-output support
+---
 
-Extend `src/lib/ai/gateway.ts` (non-breaking) with an optional `responseSchema` param on `callLLMJson`:
+## Part 1 — Product Image Upload & Visual Grounding
 
-- Gemini direct path: pass `generationConfig: { responseMimeType: "application/json", responseSchema, ... }`.
-- Lovable Gateway / OpenRouter paths: translate to `response_format: { type: "json_schema", json_schema: { name, schema, strict: true } }`.
-- Existing signatures still work when no schema is passed. Provider selection + fallback logic unchanged.
-- Add small helper `defineSchema()` for building schemas with stable `propertyOrdering` (Gemini-specific field, ignored elsewhere).
+**New type** (`src/types.ts`)
+- `ProductImageRef { id, dataUrl, width, height, addedAt, order }`
+- `ProductVisualProfile { productType, visibleMaterials[], visibleColors[], packagingStyle, labelStyle, shapeDescription, keyVisibleParts[], visibleAccessories[], likelyUsageContext, premiumLevel, photoConsistencyNotes, mustPreserve[], mustAvoid[] }`
+- Extend `Project` with optional `productImages?: ProductImageRef[]` and `visualProfile?: ProductVisualProfile | null` (null = analyzed but skipped; undefined = never attempted).
 
-## 2. New type surface (`src/types.ts`)
+**Storage** (`src/lib/storage.ts` + `store.tsx`)
+- New keys `lpai:productImages:${projectId}` and `lpai:visualProfile:${projectId}`.
+- Client-side downscale to max 1024px longest edge, JPEG q=0.82, stored as base64 data URLs. Warn if total >4 MB.
+- Store helpers: `getProductImages / saveProductImages / getVisualProfile / saveVisualProfile`.
 
-Extend without breaking existing consumers:
+**Upload UI**
+- New component `src/components/ProductImageUploader.tsx`: drag-drop + file picker, thumbnails with remove + drag-reorder, cap at 10, category-aware copy.
+- Wired into `src/routes/app.product.new.tsx` as a step after brand details, before "Generate concepts". For SaaS/finance/service categories, the step is present but explicitly skippable ("No physical product — skip").
 
-- `ProjectClassification`: `category` (union of 8 values from spec), `subcategory`, `audienceSophistication`, `awarenessLevel`, `toneSummary`.
-- `ProjectResearch` gains: `classification`, `trustSignalsNeeded[]`, `verifiedFacts[]`, `forbiddenClaims[]` (keep old fields for back-compat).
-- `SectionProps` / elements gain: `imageMode` (union of 13 modes), `negativePrompt`, `proofNeeded?: boolean`, `placeholder?: boolean` (drives the "Needs your input" UI tag).
-- `VisualIdentityBrief`: brandName, category, productType, visualIntent, preferredImageModes[], forbiddenImageModes[], sceneSuggestions, productPresentationStyle, environmentStyle, lightingStyle, compositionStyle, paletteHints, realismLevel.
-- `GeneratedImagePreview` gains: `imageMode`, `category`.
+**Analysis route** (`src/routes/api/analyze-product-images.ts`)
+- POST `{ projectId, category, images: [{dataUrl}] }`.
+- For physical categories only. Calls existing gateway with multimodal input (image_url blocks with data URLs) using default Gemini model, `responseSchema` matching `ProductVisualProfile`.
+- Returns the profile; client persists via store. If no images or non-physical category: returns `{ profile: null, mode: "text_only_visual_inference" }`.
 
-## 3. New AI service modules
+**Prompt integration**
+- Extend `research.ts`, `generate-strategies.ts`, `generate-elements.ts`, and image-prompt generation to accept optional `visualProfile`. When present, injected as a `PRODUCT VISUAL GROUNDING` block with the hard rule: "Use the uploaded product-image analysis as the primary visual grounding source. Do not invent a different product shape, packaging, material, label design, or accessories than what was analyzed. Preserve every item in mustPreserve; avoid every item in mustAvoid."
+- Image prompts additionally weave `mustPreserve[]` into subject/material/label fields.
 
-Create thin, single-purpose modules that all call through the existing gateway:
+**Confidence badge**
+- New `<GroundingBadge>` shown on concept, elements, and image panels: "Grounded in N uploaded product images" (accent) or "Text-only visual inference" (muted).
 
-- `src/lib/ai/classify.ts` — `classifyProject(input) → ProjectClassification`. Runs first, always. Structured schema.
-- `src/lib/ai/research.ts` — `researchProject(input, classification) → ProjectResearch`. Handles `sourceMode: "url" | "brief"`, best-effort page fetch (reuse logic from existing `api/research-project.ts`), records `note` on fetch failure. Emits `verifiedFacts` only from user brief or fetched text; emits `forbiddenClaims` naming everything not provided (reviews, ratings, press, guarantees, shipping, certifications, metrics).
-- `src/lib/ai/strategies.ts` — `generateStrategies(research, classification) → LandingPageConcept[5]`. One Gemini call per framework family (parallel), each prompt receives classification + verifiedFacts + forbiddenClaims + category-language guidance. Structured schema per concept.
-- `src/lib/ai/elements.ts` — `generateElements(concept, research, classification) → LandingPageElements`. Adds `proofNeeded`, `placeholder` flags, `copyExportText`.
-- `src/lib/ai/visual.ts` — `generateVisualIdentityBrief(research, classification, product) → VisualIdentityBrief`. Cached per project.
-- `src/lib/ai/images.ts` — `generateImagePrompts(section, visualBrief, classification)` produces the structured prompt object (imageMode, subject, setting, cameraFraming, lighting, styleReferences, mood, negativePrompt) and `pickPreviewSeed(imageMode, category)` for the preview endpoint.
+---
 
-Every prompt in strategies/elements/images includes the hard rule:
-> Never invent numbers, ratings, review counts, quotes, press/media mentions, warehouse or shipping claims, guarantee terms, return rates, certifications, or competitor claims. If not in verifiedFacts, output a labeled placeholder ("Add verified metric here", "Add real customer testimonial here") and set `placeholder: true`.
+## Part 2 — Real Image Generation via Puter.js
 
-And the category-language rule (SaaS/finance vs. DTC/beauty/food vs. service vs. hardware) exactly as specified in the brief.
+**Loader**
+- Add `<script src="https://js.puter.com/v2/"></script>` via `head.scripts` in `src/routes/__root.tsx`. Client-only; no key required.
+- Small wrapper `src/lib/puter.ts` with `ensurePuter()` (waits for `window.puter`) and `generateImage({ prompt, negativePrompt, model, referenceImages? })`.
 
-## 4. Server routes
+**Per-section control** (`src/components/SectionRenderer.tsx` + concept detail page)
+- Keep existing Picsum preview as immediate placeholder.
+- Add two buttons per image slot: "Generate real image" and "Keep placeholder". No auto-generation.
+- While generating: loading shimmer over the placeholder. On success: swap preview to Puter blob URL and update `GeneratedImagePreview.status = "real"` in localStorage. On failure/timeout (20s): keep Picsum, show muted label "Image generation failed — using placeholder."
 
-Update in place; keep paths and response shapes compatible with existing UI consumers:
+**Model routing by imageMode** (in `src/lib/puter.ts`)
+- `product_packshot | product_in_use | material_detail | ingredient_macro` → photoreal model (try `black-forest-labs/flux.2-pro`, fall back to `openai/gpt-image-2`).
+- `interface_ui | dashboard_closeup | comparison_graphic | data_visual_support` → UI-friendly model (`openai/gpt-image-2` clean vector-oriented prompt).
+- `abstract_brand_texture | iconographic_brand_visual | quote_card_visual` → any general model default.
 
-- `src/routes/api/classify-project.ts` (new) — POST, returns `ProjectClassification`.
-- `src/routes/api/research-project.ts` — call `classifyProject` first, then `researchProject`, return extended `ProjectResearch` including `classification`.
-- `src/routes/api/generate-strategies.ts` — delegate to `strategies.ts`. Remove the hardcoded `FRAMEWORKS` copy-shaping logic; keep only the framework family list (name + section-count hint) and pass everything else to the model with the research + classification.
-- `src/routes/api/generate-elements.ts` — delegate to `elements.ts`; adds placeholder/proofNeeded flags.
-- `src/routes/api/generate-images.ts` — call `images.ts` to (a) classify each section's imageMode using the visual brief, (b) build the structured prompt, (c) map (imageMode, category) → a curated deterministic Picsum seed set (e.g., abstract textures for `interface_ui`/`abstract_brand_texture`, product-composition-style seeds for `product_packshot`, editorial seeds for `founder_story_editorial`, plain gradient placeholder for `no_image_needed`). Never fully random.
+**Prompt assembly**
+- Base = existing `imagePrompt` + " Avoid: " + `negativePrompt` (falling back to a default negative list including "mountains, oceans, unrelated scenery, random fruit, random objects, incorrect product shape, text overlays, watermarks").
+- If `visualProfile` exists: append "Product visual grounding — must preserve: {mustPreserve}. Materials: {visibleMaterials}. Colors: {visibleColors}. Label style: {labelStyle}. Shape: {shapeDescription}."
+- If uploaded product images exist AND the selected Puter model supports image-to-image input, pass the first 1–3 references via Puter's image-input option (detected at call time). Otherwise text-only. Wrapped in try/catch so an unsupported model silently falls back to text-only.
 
-## 5. Generator refactor (`src/lib/generator.ts`)
+---
 
-- Strip all hardcoded copy, fake proof, review counts, press mentions (WIRED/VOGUE/GQ etc.), warehouse/shipping/guarantee claims.
-- Becomes a thin orchestrator: `runFullPipeline(project)` → classify → research → strategies (or single-concept regenerate) → elements → images, all through the AI modules above.
-- Regenerate-concept, get-elements, and generate-images entry points all go through this orchestrator.
-- Keep ONE clearly-labeled `LAST_RESORT_FALLBACK` used only if the entire gateway chain throws. It emits placeholder-only sections ("Add real headline here", "Add verified metric here", `placeholder: true`) — never fabricated content.
+## Part 3 — Navigation (Back Button + Breadcrumbs)
 
-## 6. UI trust labeling
+**Back control**
+- New `<BackLink>` component using TanStack `<Link>` with `to=".."` `from={Route.fullPath}` so it maps to real route history (browser back-compatible, preload="intent").
+- Add to `app.project.$projectId.concept.$conceptId.tsx`, `app.project.$projectId.generating.tsx`, and any elements/image sub-pages, labelled contextually ("← Back to concepts", "← Back to project").
 
-Minimal, additive to existing components (no redesign):
+**Breadcrumbs**
+- New `<Breadcrumbs>` at top of deep pages: `Project Name / Concept Name / Elements`, each segment a `<Link>`. Uses store lookups for names.
 
-- `src/components/SectionRenderer.tsx` and the elements rail in `app.project.$projectId.concept.$conceptId.tsx`: when a field or section has `placeholder: true` or `proofNeeded: true`, render a small badge ("Needs your input" / "Suggested — verify before use") next to the value using the existing `Badge` component.
-- No layout, spacing, or navigation changes.
+**History hygiene**
+- Audit uses of `useNavigate` — replace click-nav with `<Link>` where a plain href works. Ensure no `replace: true` on normal transitions.
+- Enable `scrollRestoration: true` in `src/router.tsx`.
 
-## 7. Self-test before finish
+---
 
-Run the pipeline end-to-end against two seed inputs (executed via the debug route or a temporary script, not shipped as UI):
+## Part 4 — Delete Project / Delete Brand
 
-1. SaaS invoicing product.
-2. DTC skincare serum.
+**Store additions** (`src/lib/store.tsx`)
+- `deleteProject(projectId)`: removes project + its concepts, and clears `lpai:research:*`, `lpai:elements:*` (per concept), `lpai:images:*` (per concept), `lpai:productImages:*`, `lpai:visualProfile:*`.
+- `deleteWorkspace(workspaceId)`: cascades — deletes all products and projects under the workspace (each via `deleteProject`), then removes the workspace itself; if it was active, reset `activeWorkspaceId`.
 
-Verify:
-- Classification returns the right category for each.
-- No fabricated proof/ratings/press anywhere in concepts or elements (grep for known fake tokens: "WIRED", "VOGUE", "GQ", "★", "4.9", "10,000+", "guarantee").
-- SaaS output uses workflow/ROI/integration language and no skincare/ritual language; DTC output uses material/formula/ritual and no ROI/dashboard language.
-- Image prompts for SaaS use `interface_ui` / `dashboard_closeup` / `abstract_brand_texture`; DTC uses `product_packshot` / `material_detail`. No nature/mountain/fruit prompts in either.
-- Placeholders are flagged with the badge in the UI.
+**UI**
+- Project card kebab menu (`DropdownMenu`) on `app.projects.tsx` and project index with a "Delete project" item → `AlertDialog` confirming with the project name.
+- Brand/workspace delete entry in `app.brand.new.tsx` / workspace switcher area with equivalent `AlertDialog`.
+- On confirm: run cascade, `toast.success("Project deleted")`, `navigate({ to: "/app" })`.
 
-## Technical notes
+---
 
-- All new modules are server-only (imported from route handlers). No new client dependencies.
-- Structured schemas kept small and constraint-free (no `.min()`/`.max()` bounds, no long enums beyond the fixed unions above) per gateway rules.
-- Strategy generation stays parallel across the 5 families; classification + research + visual brief run once per project and are cached on the project object in local storage.
-- Preview image mapping is a static table in `images.ts` keyed by `(imageMode, category)` → Picsum seed list; deterministic hash chooses within the list. No random scenery.
-- No changes to routes, router config, auth, storage keys, or the gateway fallback chain.
+## Part 5 — Premium / Futuristic UI
+
+**Tokens** (`src/styles.css`)
+- Introduce a dark-first neutral palette (deep slate surfaces, alpha-blended borders `color-mix(in oklab, foreground 8%, transparent)`), one confident accent (a restrained electric teal — no purple/blue gradient cliché), semantic tokens for `--surface-1..3`, `--border-soft`, `--shadow-soft/elevated`, `--radius-sm/md/lg`.
+- Add `@theme` entries for the new colors so Tailwind utilities pick them up.
+- Full light-mode counterpart with matched contrast (WCAG AA verified on primary/foreground/background pairs).
+
+**Typography**
+- Load Satoshi (display) + General Sans (body) from Fontshare via `<link>` in `__root.tsx` head. Update `--font-display` and `--font-sans` in `@theme`. Apply `font-display` to h1/h2/hero, body font elsewhere.
+
+**Component polish**
+- Update `Button`, `Card`, `Input`, `DropdownMenu`, `Dialog`, and `AppShell` for the new tokens: soft layered surfaces, alpha borders, subtle inner highlight on hover, focus rings using the accent at 40% alpha.
+- Micro-interactions: 120–180ms ease-out on hover/press. `motion-safe:` only, respecting `prefers-reduced-motion`.
+- Page transitions: lightweight fade+translate on route content wrapper in `AppShell`, using CSS transitions keyed on `pathname`. Skip when reduced-motion.
+
+**Dark mode toggle**
+- Add `ThemeProvider` (class-based `dark`) with toggle in `AppShell` header, persisted in localStorage. Default = system, then dark.
+
+**Consistency pass**
+- Apply tokens across dashboard, new project flow, project detail, concept detail, elements panel, image panel, account/settings. Ensure 44px min touch targets and consistent spacing scale.
+
+---
+
+## Self-test checklist (run before reporting done)
+1. Upload 2 images to a `beauty_skincare` project → `visualProfile.mustPreserve` populated; strategies/elements prompts contain the grounding block; badge reads "Grounded in 2 uploaded product images".
+2. SaaS project with no upload → badge reads "Text-only visual inference"; pipeline still runs.
+3. Click "Generate real image" on a `product_packshot` section of the skincare project → Puter returns image resembling the uploaded bottle; on a SaaS `interface_ui` section → clean UI-style render.
+4. Back links + browser back/forward traverse project → concept → elements without dead-ends; scroll roughly restored.
+5. Delete project → confirmation → cascade removes all `lpai:*:<id>` keys, toast shown, redirect to /app. Delete brand → all child projects gone, no orphans in localStorage.
+6. Dark + light modes both polished across dashboard, concept detail, elements panel; AA contrast passes.
 
 ## Out of scope
-
-Supabase, real image generation, publishing, analytics, collaboration, Shopify API, UI redesign, new pages, framework additions.
+- Supabase or any server-side persistence
+- Changes to the classification / no-fabrication / imageMode logic
+- Changes to the Gemini/Lovable/OpenRouter fallback chain
+- New framework families or new pipeline steps beyond the analyze-product-images call

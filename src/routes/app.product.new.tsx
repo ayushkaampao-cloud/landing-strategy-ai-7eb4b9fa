@@ -2,7 +2,8 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { useState, type FormEvent } from "react";
-import type { ProjectGoal, ProjectSourceMode } from "@/types";
+import type { ProductImageRef, ProjectGoal, ProjectSourceMode } from "@/types";
+import { ProductImageUploader } from "@/components/ProductImageUploader";
 
 export const Route = createFileRoute("/app/product/new")({
   component: NewProduct,
@@ -11,7 +12,7 @@ export const Route = createFileRoute("/app/product/new")({
 const GOALS: ProjectGoal[] = ["Sell product", "Collect leads", "Book calls"];
 
 function NewProduct() {
-  const { activeWorkspace, createProduct, createProject } = useStore();
+  const { activeWorkspace, createProduct, createProject, saveProductImages, saveVisualProfile } = useStore();
   const navigate = useNavigate();
 
   const [sourceMode, setSourceMode] = useState<ProjectSourceMode>("brief");
@@ -32,6 +33,8 @@ function NewProduct() {
   const [desiredAngle, setDesiredAngle] = useState("");
   const [projectName, setProjectName] = useState("");
   const [goal, setGoal] = useState<ProjectGoal>("Sell product");
+  const [productImages, setProductImages] = useState<ProductImageRef[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
 
   if (!activeWorkspace) {
     return (
@@ -50,7 +53,7 @@ function NewProduct() {
     );
   }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name) return;
     const product = createProduct({
@@ -77,6 +80,32 @@ function NewProduct() {
       competitor: competitor || undefined,
       desiredAngle: desiredAngle || undefined,
     });
+
+    // Persist uploads + kick off visual analysis (best-effort; never blocks).
+    if (productImages.length > 0) {
+      saveProductImages(project.id, productImages);
+      setAnalyzing(true);
+      try {
+        const res = await fetch("/api/analyze-product-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            images: productImages.map((i) => ({ dataUrl: i.dataUrl })),
+          }),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { profile: import("@/types").ProductVisualProfile | null };
+          saveVisualProfile(project.id, data.profile);
+        }
+      } catch (err) {
+        console.warn("[product-image analysis] failed:", err);
+      } finally {
+        setAnalyzing(false);
+      }
+    } else {
+      saveVisualProfile(project.id, null);
+    }
+
     navigate({
       to: "/app/project/$projectId/generating",
       params: { projectId: project.id },
@@ -204,6 +233,18 @@ function NewProduct() {
           )}
 
           <div className="pt-6 mt-6 border-t border-border">
+            <h2 className="text-lg font-semibold mb-1 tracking-tight">Product images</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Upload up to 10 photos of the real product. We analyze them so downstream copy and generated visuals stay grounded in what your product actually looks like.
+            </p>
+            <ProductImageUploader
+              images={productImages}
+              onChange={setProductImages}
+              optional
+            />
+          </div>
+
+          <div className="pt-6 mt-6 border-t border-border">
             <h2 className="text-lg font-semibold mb-4 tracking-tight">Project</h2>
             <Field
               label="Project name"
@@ -234,9 +275,10 @@ function NewProduct() {
 
           <button
             type="submit"
-            className="h-11 px-6 bg-ink text-background font-medium rounded-md text-sm"
+            disabled={analyzing}
+            className="h-11 px-6 bg-ink text-background font-medium rounded-md text-sm disabled:opacity-60"
           >
-            Run research & generate 5 directions →
+            {analyzing ? "Analyzing product images…" : "Run research & generate 5 directions →"}
           </button>
         </form>
       </div>

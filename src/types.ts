@@ -48,6 +48,31 @@ export interface Project {
   desiredAngle?: string;
 }
 
+export interface ProductImageRef {
+  id: string;
+  dataUrl: string;
+  width: number;
+  height: number;
+  addedAt: string;
+  order: number;
+}
+
+export interface ProductVisualProfile {
+  productType: string;
+  visibleMaterials: string[];
+  visibleColors: string[];
+  packagingStyle: string;
+  labelStyle: string;
+  shapeDescription: string;
+  keyVisibleParts: string[];
+  visibleAccessories: string[];
+  likelyUsageContext: string;
+  premiumLevel: string;
+  photoConsistencyNotes: string;
+  mustPreserve: string[];
+  mustAvoid: string[];
+}
+
 export interface BrandBrief {
   positioning: string;
   toneSummary: string;
@@ -251,9 +276,10 @@ export interface GeneratedImagePreview {
   imagePrompt: string;
   imageStyle: string;
   previewUrl: string;
-  status: "simulated" | "generated";
+  status: "simulated" | "generated" | "real" | "failed";
   imageMode?: ImageMode;
   category?: ProjectCategory;
+  realUrl?: string;
 }
 
 export interface GenerationRun {
