@@ -63,7 +63,7 @@ function NewProduct() {
       goal,
     });
     navigate({
-      to: "/app/project/$projectId/generating",
+      to: "/app/project/$projectId",
       params: { projectId: project.id },
     });
   };
