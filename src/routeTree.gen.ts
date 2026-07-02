@@ -21,6 +21,7 @@ import { Route as ApiGenerateStrategiesRouteImport } from './routes/api/generate
 import { Route as ApiGenerateImagesRouteImport } from './routes/api/generate-images'
 import { Route as ApiGenerateElementsRouteImport } from './routes/api/generate-elements'
 import { Route as ApiDebugLlmRouteImport } from './routes/api/debug-llm'
+import { Route as ApiClassifyProjectRouteImport } from './routes/api/classify-project'
 import { Route as AppProductNewRouteImport } from './routes/app.product.new'
 import { Route as AppBrandNewRouteImport } from './routes/app.brand.new'
 import { Route as AppProjectProjectIdIndexRouteImport } from './routes/app.project.$projectId.index'
@@ -87,6 +88,11 @@ const ApiDebugLlmRoute = ApiDebugLlmRouteImport.update({
   path: '/api/debug-llm',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiClassifyProjectRoute = ApiClassifyProjectRouteImport.update({
+  id: '/api/classify-project',
+  path: '/api/classify-project',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppProductNewRoute = AppProductNewRouteImport.update({
   id: '/product/new',
   path: '/product/new',
@@ -120,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/api/classify-project': typeof ApiClassifyProjectRoute
   '/api/debug-llm': typeof ApiDebugLlmRoute
   '/api/generate-elements': typeof ApiGenerateElementsRoute
   '/api/generate-images': typeof ApiGenerateImagesRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/api/classify-project': typeof ApiClassifyProjectRoute
   '/api/debug-llm': typeof ApiDebugLlmRoute
   '/api/generate-elements': typeof ApiGenerateElementsRoute
   '/api/generate-images': typeof ApiGenerateImagesRoute
@@ -158,6 +166,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/api/classify-project': typeof ApiClassifyProjectRoute
   '/api/debug-llm': typeof ApiDebugLlmRoute
   '/api/generate-elements': typeof ApiGenerateElementsRoute
   '/api/generate-images': typeof ApiGenerateImagesRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/api/classify-project'
     | '/api/debug-llm'
     | '/api/generate-elements'
     | '/api/generate-images'
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/api/classify-project'
     | '/api/debug-llm'
     | '/api/generate-elements'
     | '/api/generate-images'
@@ -216,6 +227,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/api/classify-project'
     | '/api/debug-llm'
     | '/api/generate-elements'
     | '/api/generate-images'
@@ -236,6 +248,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiClassifyProjectRoute: typeof ApiClassifyProjectRoute
   ApiDebugLlmRoute: typeof ApiDebugLlmRoute
   ApiGenerateElementsRoute: typeof ApiGenerateElementsRoute
   ApiGenerateImagesRoute: typeof ApiGenerateImagesRoute
@@ -329,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDebugLlmRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/classify-project': {
+      id: '/api/classify-project'
+      path: '/api/classify-project'
+      fullPath: '/api/classify-project'
+      preLoaderRoute: typeof ApiClassifyProjectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/product/new': {
       id: '/app/product/new'
       path: '/product/new'
@@ -398,6 +418,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiClassifyProjectRoute: ApiClassifyProjectRoute,
   ApiDebugLlmRoute: ApiDebugLlmRoute,
   ApiGenerateElementsRoute: ApiGenerateElementsRoute,
   ApiGenerateImagesRoute: ApiGenerateImagesRoute,
