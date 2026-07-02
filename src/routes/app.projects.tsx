@@ -40,6 +40,7 @@ function ProjectsList() {
           <div className="grid gap-3">
             {wsProjects.map((p) => {
               const product = products.find((pr) => pr.id === p.productId);
+              const generated = hasConcepts(p.id);
               return (
                 <Link
                   key={p.id}
@@ -53,7 +54,18 @@ function ProjectsList() {
                       {product?.name} · {p.goal}
                     </div>
                   </div>
-                  <span className="mono-tag text-muted-foreground">View →</span>
+                  <div className="flex items-center gap-4">
+                    <span
+                      className={`mono-tag px-2 py-0.5 rounded ${
+                        generated
+                          ? "bg-accent/10 text-accent"
+                          : "bg-surface-muted text-muted-foreground ring-soft"
+                      }`}
+                    >
+                      {generated ? "Generated" : "Not generated"}
+                    </span>
+                    <span className="mono-tag text-muted-foreground">View →</span>
+                  </div>
                 </Link>
               );
             })}
