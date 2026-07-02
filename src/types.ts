@@ -276,9 +276,10 @@ export interface GeneratedImagePreview {
   imagePrompt: string;
   imageStyle: string;
   previewUrl: string;
-  status: "simulated" | "generated";
+  status: "simulated" | "generated" | "real" | "failed";
   imageMode?: ImageMode;
   category?: ProjectCategory;
+  realUrl?: string;
 }
 
 export interface GenerationRun {
