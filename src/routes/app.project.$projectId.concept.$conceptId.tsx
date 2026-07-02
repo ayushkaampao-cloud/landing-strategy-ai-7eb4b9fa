@@ -213,6 +213,8 @@ function ConceptDetail() {
             shortDescription: product!.shortDescription,
             priceInfo: product!.priceInfo,
           },
+          research: research ?? undefined,
+          classification: research?.classification,
         }),
       });
       clearInterval(stepTimer);
