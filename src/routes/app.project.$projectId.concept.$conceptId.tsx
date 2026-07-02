@@ -208,7 +208,7 @@ function ConceptDetail() {
     try {
       const url = await generateRealImage({
         prompt: img.imagePrompt,
-        negativePrompt: concept.schema.sections.find((s) => s.id === sectionId)?.negativePrompt,
+        negativePrompt: concept?.schema.sections.find((s) => s.id === sectionId)?.negativePrompt,
         imageMode: img.imageMode,
         visualProfile,
         referenceImages: productImages,
