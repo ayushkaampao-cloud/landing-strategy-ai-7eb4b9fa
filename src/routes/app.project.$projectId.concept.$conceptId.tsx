@@ -241,11 +241,12 @@ function ConceptDetail() {
           imagePrompt: p,
           imageStyle: elements.globalStyle.imageStyle,
         })),
-        ...elements.sections.flatMap((s) =>
-          (s.imagePrompts ?? []).map((p) => ({
-            sectionId: s.sectionId,
+        ...elements.sections.flatMap((sec) =>
+          (sec.imagePrompts ?? []).map((p) => ({
+            sectionId: sec.sectionId,
             imagePrompt: p,
             imageStyle: elements.globalStyle.imageStyle,
+            imageMode: sec.imageMode,
           })),
         ),
       ];
@@ -255,6 +256,7 @@ function ConceptDetail() {
         body: JSON.stringify({
           projectName: project!.projectName,
           conceptName: concept!.conceptName,
+          category: research?.classification?.category,
           items,
         }),
       });
