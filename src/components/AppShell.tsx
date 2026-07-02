@@ -131,7 +131,10 @@ export function TopBar({ children }: { children?: ReactNode }) {
       <div className="flex items-center gap-2 text-xs">
         <span className="mono-tag text-muted-foreground">{activeWorkspace?.name ?? "Workspace"}</span>
       </div>
-      <div className="flex items-center gap-3">{children}</div>
+      <div className="flex items-center gap-3">
+        {children}
+        <ThemeToggle />
+      </div>
     </header>
   );
 }
