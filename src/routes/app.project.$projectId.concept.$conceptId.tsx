@@ -3,7 +3,8 @@ import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, generateConceptsForProject } from "@/lib/generator";
 import { SectionRenderer } from "@/components/SectionRenderer";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { GeneratedImagePreview, LandingPageElements } from "@/types";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
   component: ConceptDetail,
@@ -11,9 +12,28 @@ export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId
 
 function ConceptDetail() {
   const { projectId, conceptId } = Route.useParams();
-  const { projects, products, workspaces, concepts, saveConcepts } = useStore();
+  const {
+    projects,
+    products,
+    workspaces,
+    concepts,
+    saveConcepts,
+    getResearch,
+    getElements,
+    saveElements,
+    getImages,
+    saveImages,
+  } = useStore();
   const navigate = useNavigate();
   const [copied, setCopied] = useState<string | null>(null);
+  const [elementsLoading, setElementsLoading] = useState(false);
+  const [elementsError, setElementsError] = useState<string | null>(null);
+  const [elementsStep, setElementsStep] = useState(0);
+  const [imagesLoading, setImagesLoading] = useState(false);
+  const [imagesError, setImagesError] = useState<string | null>(null);
+  const [elementsVersion, setElementsVersion] = useState(0);
+  const [imagesVersion, setImagesVersion] = useState(0);
+
 
   const project = projects.find((p) => p.id === projectId);
   const product = products.find((p) => p.id === project?.productId);
