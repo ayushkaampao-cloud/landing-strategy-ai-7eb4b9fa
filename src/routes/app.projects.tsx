@@ -7,8 +7,10 @@ export const Route = createFileRoute("/app/projects")({
 });
 
 function ProjectsList() {
-  const { projects, products, activeWorkspace } = useStore();
+  const { projects, products, concepts, activeWorkspace } = useStore();
   const wsProjects = projects.filter((p) => p.workspaceId === activeWorkspace?.id);
+  const hasConcepts = (projectId: string) =>
+    concepts.some((c) => c.projectId === projectId);
   return (
     <>
       <TopBar>
