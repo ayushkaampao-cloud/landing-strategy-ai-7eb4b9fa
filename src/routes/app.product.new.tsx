@@ -53,7 +53,7 @@ function NewProduct() {
     );
   }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name) return;
     const product = createProduct({
@@ -80,6 +80,32 @@ function NewProduct() {
       competitor: competitor || undefined,
       desiredAngle: desiredAngle || undefined,
     });
+
+    // Persist uploads + kick off visual analysis (best-effort; never blocks).
+    if (productImages.length > 0) {
+      saveProductImages(project.id, productImages);
+      setAnalyzing(true);
+      try {
+        const res = await fetch("/api/analyze-product-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            images: productImages.map((i) => ({ dataUrl: i.dataUrl })),
+          }),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { profile: import("@/types").ProductVisualProfile | null };
+          saveVisualProfile(project.id, data.profile);
+        }
+      } catch (err) {
+        console.warn("[product-image analysis] failed:", err);
+      } finally {
+        setAnalyzing(false);
+      }
+    } else {
+      saveVisualProfile(project.id, null);
+    }
+
     navigate({
       to: "/app/project/$projectId/generating",
       params: { projectId: project.id },
