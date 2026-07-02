@@ -15,6 +15,10 @@ export interface LLMOptions {
   temperature?: number;
   maxTokens?: number;
   json?: boolean;
+  /** Optional JSON schema. Passed to Gemini as responseSchema and to
+   *  OpenAI-compatible providers as response_format json_schema. */
+  responseSchema?: Record<string, unknown>;
+  schemaName?: string;
 }
 
 type ProviderName = "gemini_direct" | "lovable_gateway" | "openrouter";
