@@ -233,12 +233,32 @@ function ConceptDetail() {
               </div>
             </div>
             <div>
-              {concept.schema.sections.map((s) => (
-                <div key={s.id} id={`section-${s.id}`}>
-                  <SectionRenderer section={s} />
-                </div>
-              ))}
+              {concept.schema.sections.map((s) => {
+                const img = imageBySection[s.id];
+                return (
+                  <div key={s.id} id={`section-${s.id}`}>
+                    <SectionRenderer section={s} />
+                    {img && (
+                      <div className="px-10 pb-10 -mt-6">
+                        <div className="rounded-lg overflow-hidden ring-soft">
+                          <img
+                            src={img.previewUrl}
+                            alt="Section preview"
+                            className="w-full h-auto block"
+                            loading="lazy"
+                          />
+                          <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground">
+                            <span className="mono-tag">Preview image · Simulated</span>
+                            <span className="truncate max-w-[60%]">{img.imagePrompt}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
+
           </div>
         </main>
 
@@ -277,6 +297,28 @@ function ConceptDetail() {
               <div className="mono-tag text-muted-foreground mb-1">Framework fit</div>
               <div className="text-[13px] leading-relaxed">{meta.bestFor}</div>
             </div>
+
+            {(concept.whyThisWorks || concept.risksOrLimits || concept.bestFor) && (
+              <div className="space-y-3 mb-6">
+                {concept.whyThisWorks && (
+                  <RailBlock label="Why this works" body={concept.whyThisWorks} />
+                )}
+                {concept.bestFor && <RailBlock label="Best for" body={concept.bestFor} />}
+                {concept.risksOrLimits && (
+                  <RailBlock label="Risks & limits" body={concept.risksOrLimits} tone="muted" />
+                )}
+              </div>
+            )}
+
+            {research && (
+              <div className="p-3 bg-surface border border-border rounded-lg mb-6">
+                <div className="mono-tag text-muted-foreground mb-1">Research snapshot</div>
+                <div className="text-[12px] leading-relaxed line-clamp-4">
+                  {research.summary}
+                </div>
+              </div>
+            )}
+
 
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
