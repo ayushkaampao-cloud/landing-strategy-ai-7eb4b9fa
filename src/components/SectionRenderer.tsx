@@ -13,7 +13,20 @@ function PlaceholderBadge({ section }: { section: SectionProps }) {
 
 export function SectionRenderer({ section }: { section: SectionProps }) {
   const s = section;
-  const badge = <PlaceholderBadge section={s} />;
+  const needsBadge = s.placeholder || s.proofNeeded;
+  const content = renderSection(s);
+  if (!needsBadge) return content;
+  return (
+    <div className="relative">
+      <div className="absolute top-3 right-3 z-10">
+        <PlaceholderBadge section={s} />
+      </div>
+      {content}
+    </div>
+  );
+}
+
+function renderSection(s: SectionProps) {
   switch (s.type) {
     case "hero":
       return (
