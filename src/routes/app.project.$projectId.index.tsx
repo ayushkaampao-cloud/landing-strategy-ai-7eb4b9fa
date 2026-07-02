@@ -9,10 +9,11 @@ export const Route = createFileRoute("/app/project/$projectId/")({
 
 function ProjectGallery() {
   const { projectId } = Route.useParams();
-  const { projects, products, concepts } = useStore();
+  const { projects, products, concepts, getResearch } = useStore();
   const project = projects.find((p) => p.id === projectId);
   const product = products.find((p) => p.id === project?.productId);
   const projectConcepts = concepts.filter((c) => c.projectId === projectId);
+  const research = getResearch(projectId);
 
   if (!project) {
     return (
@@ -95,9 +96,33 @@ function ProjectGallery() {
         <h1 className="text-3xl font-semibold tracking-tight mb-1">
           {project.projectName}
         </h1>
-        <p className="text-muted-foreground text-sm mb-10">
+        <p className="text-muted-foreground text-sm mb-8">
           {product?.name} · 5 strategic directions · {ordered.reduce((n, c) => n + c.schema.sections.length, 0)} sections total
         </p>
+
+        {research && (
+          <div className="mb-8 p-5 bg-surface border border-border rounded-xl">
+            <div className="flex items-center justify-between mb-3">
+              <div className="mono-tag text-accent">Research snapshot</div>
+              <div className="mono-tag text-muted-foreground">
+                source: {research.sourceMode}
+              </div>
+            </div>
+            <p className="text-sm leading-relaxed mb-4">{research.summary}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <ResearchBlock label="Competitor angles" items={research.competitorAngles} />
+              <ResearchBlock label="Objections" items={research.objections} />
+              <ResearchBlock label="Trust signals" items={research.trustSignals} />
+              <ResearchBlock label="Positioning ideas" items={research.positioningIdeas} />
+              <ResearchBlock label="Keywords" items={research.keywords} />
+              <ResearchBlock label="Image style" items={research.imageStyleHints} />
+            </div>
+            {research.note && (
+              <div className="mt-3 mono-tag text-muted-foreground">{research.note}</div>
+            )}
+          </div>
+        )}
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {ordered.map((c) => {
@@ -187,3 +212,20 @@ function ProjectGallery() {
     </>
   );
 }
+
+function ResearchBlock({ label, items }: { label: string; items: string[] }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div>
+      <div className="mono-tag text-muted-foreground mb-1.5">{label}</div>
+      <ul className="space-y-1">
+        {items.slice(0, 5).map((it, i) => (
+          <li key={i} className="text-[12px] leading-snug">
+            · {it}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+

@@ -16,6 +16,10 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppProjectsRouteImport } from './routes/app.projects'
 import { Route as AppNewRouteImport } from './routes/app.new'
 import { Route as AppAccountRouteImport } from './routes/app.account'
+import { Route as ApiResearchProjectRouteImport } from './routes/api/research-project'
+import { Route as ApiGenerateStrategiesRouteImport } from './routes/api/generate-strategies'
+import { Route as ApiGenerateImagesRouteImport } from './routes/api/generate-images'
+import { Route as ApiGenerateElementsRouteImport } from './routes/api/generate-elements'
 import { Route as AppProductNewRouteImport } from './routes/app.product.new'
 import { Route as AppBrandNewRouteImport } from './routes/app.brand.new'
 import { Route as AppProjectProjectIdIndexRouteImport } from './routes/app.project.$projectId.index'
@@ -57,6 +61,26 @@ const AppAccountRoute = AppAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiResearchProjectRoute = ApiResearchProjectRouteImport.update({
+  id: '/api/research-project',
+  path: '/api/research-project',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGenerateStrategiesRoute = ApiGenerateStrategiesRouteImport.update({
+  id: '/api/generate-strategies',
+  path: '/api/generate-strategies',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGenerateImagesRoute = ApiGenerateImagesRouteImport.update({
+  id: '/api/generate-images',
+  path: '/api/generate-images',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGenerateElementsRoute = ApiGenerateElementsRouteImport.update({
+  id: '/api/generate-elements',
+  path: '/api/generate-elements',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppProductNewRoute = AppProductNewRouteImport.update({
   id: '/product/new',
   path: '/product/new',
@@ -90,6 +114,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/api/generate-elements': typeof ApiGenerateElementsRoute
+  '/api/generate-images': typeof ApiGenerateImagesRoute
+  '/api/generate-strategies': typeof ApiGenerateStrategiesRoute
+  '/api/research-project': typeof ApiResearchProjectRoute
   '/app/account': typeof AppAccountRoute
   '/app/new': typeof AppNewRoute
   '/app/projects': typeof AppProjectsRoute
@@ -103,6 +131,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/api/generate-elements': typeof ApiGenerateElementsRoute
+  '/api/generate-images': typeof ApiGenerateImagesRoute
+  '/api/generate-strategies': typeof ApiGenerateStrategiesRoute
+  '/api/research-project': typeof ApiResearchProjectRoute
   '/app/account': typeof AppAccountRoute
   '/app/new': typeof AppNewRoute
   '/app/projects': typeof AppProjectsRoute
@@ -118,6 +150,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/api/generate-elements': typeof ApiGenerateElementsRoute
+  '/api/generate-images': typeof ApiGenerateImagesRoute
+  '/api/generate-strategies': typeof ApiGenerateStrategiesRoute
+  '/api/research-project': typeof ApiResearchProjectRoute
   '/app/account': typeof AppAccountRoute
   '/app/new': typeof AppNewRoute
   '/app/projects': typeof AppProjectsRoute
@@ -134,6 +170,10 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/api/generate-elements'
+    | '/api/generate-images'
+    | '/api/generate-strategies'
+    | '/api/research-project'
     | '/app/account'
     | '/app/new'
     | '/app/projects'
@@ -147,6 +187,10 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/api/generate-elements'
+    | '/api/generate-images'
+    | '/api/generate-strategies'
+    | '/api/research-project'
     | '/app/account'
     | '/app/new'
     | '/app/projects'
@@ -161,6 +205,10 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/api/generate-elements'
+    | '/api/generate-images'
+    | '/api/generate-strategies'
+    | '/api/research-project'
     | '/app/account'
     | '/app/new'
     | '/app/projects'
@@ -176,6 +224,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiGenerateElementsRoute: typeof ApiGenerateElementsRoute
+  ApiGenerateImagesRoute: typeof ApiGenerateImagesRoute
+  ApiGenerateStrategiesRoute: typeof ApiGenerateStrategiesRoute
+  ApiResearchProjectRoute: typeof ApiResearchProjectRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -228,6 +280,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/account'
       preLoaderRoute: typeof AppAccountRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/research-project': {
+      id: '/api/research-project'
+      path: '/api/research-project'
+      fullPath: '/api/research-project'
+      preLoaderRoute: typeof ApiResearchProjectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/generate-strategies': {
+      id: '/api/generate-strategies'
+      path: '/api/generate-strategies'
+      fullPath: '/api/generate-strategies'
+      preLoaderRoute: typeof ApiGenerateStrategiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/generate-images': {
+      id: '/api/generate-images'
+      path: '/api/generate-images'
+      fullPath: '/api/generate-images'
+      preLoaderRoute: typeof ApiGenerateImagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/generate-elements': {
+      id: '/api/generate-elements'
+      path: '/api/generate-elements'
+      fullPath: '/api/generate-elements'
+      preLoaderRoute: typeof ApiGenerateElementsRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/app/product/new': {
       id: '/app/product/new'
@@ -298,6 +378,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiGenerateElementsRoute: ApiGenerateElementsRoute,
+  ApiGenerateImagesRoute: ApiGenerateImagesRoute,
+  ApiGenerateStrategiesRoute: ApiGenerateStrategiesRoute,
+  ApiResearchProjectRoute: ApiResearchProjectRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -3,7 +3,8 @@ import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, generateConceptsForProject } from "@/lib/generator";
 import { SectionRenderer } from "@/components/SectionRenderer";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { GeneratedImagePreview, LandingPageElements } from "@/types";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
   component: ConceptDetail,
@@ -11,9 +12,28 @@ export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId
 
 function ConceptDetail() {
   const { projectId, conceptId } = Route.useParams();
-  const { projects, products, workspaces, concepts, saveConcepts } = useStore();
+  const {
+    projects,
+    products,
+    workspaces,
+    concepts,
+    saveConcepts,
+    getResearch,
+    getElements,
+    saveElements,
+    getImages,
+    saveImages,
+  } = useStore();
   const navigate = useNavigate();
   const [copied, setCopied] = useState<string | null>(null);
+  const [elementsLoading, setElementsLoading] = useState(false);
+  const [elementsError, setElementsError] = useState<string | null>(null);
+  const [elementsStep, setElementsStep] = useState(0);
+  const [imagesLoading, setImagesLoading] = useState(false);
+  const [imagesError, setImagesError] = useState<string | null>(null);
+  const [elementsVersion, setElementsVersion] = useState(0);
+  const [imagesVersion, setImagesVersion] = useState(0);
+
 
   const project = projects.find((p) => p.id === projectId);
   const product = products.find((p) => p.id === project?.productId);
@@ -93,6 +113,99 @@ function ConceptDetail() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const research = getResearch(projectId);
+  const elements = useMemo(
+    () => getElements(conceptId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conceptId, elementsVersion],
+  );
+  const images = useMemo(
+    () => getImages(conceptId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conceptId, imagesVersion],
+  );
+  const imageBySection = useMemo(() => {
+    const map: Record<string, GeneratedImagePreview> = {};
+    images.forEach((i) => (map[i.sectionId] = i));
+    return map;
+  }, [images]);
+
+  async function handleGenerateElements() {
+    setElementsLoading(true);
+    setElementsError(null);
+    setElementsStep(1);
+    try {
+      const stepTimer = setInterval(() => setElementsStep((s) => Math.min(s + 1, 4)), 700);
+      const res = await fetch("/api/generate-elements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          concept,
+          workspace: {
+            name: workspace!.name,
+            brandDescription: workspace!.brandDescription,
+            primaryAudience: workspace!.primaryAudience,
+          },
+          product: {
+            name: product!.name,
+            shortDescription: product!.shortDescription,
+            priceInfo: product!.priceInfo,
+          },
+        }),
+      });
+      clearInterval(stepTimer);
+      if (!res.ok) throw new Error((await res.text()) || "Element generation failed");
+      const data = (await res.json()) as LandingPageElements;
+      saveElements(conceptId, data);
+      setElementsVersion((v) => v + 1);
+      setElementsStep(4);
+    } catch (err) {
+      setElementsError((err as Error).message);
+    } finally {
+      setElementsLoading(false);
+    }
+  }
+
+  async function handleGenerateImages() {
+    if (!elements) return;
+    setImagesLoading(true);
+    setImagesError(null);
+    try {
+      const items = [
+        ...elements.hero.imagePrompts.map((p, i) => ({
+          sectionId: `hero-${i}`,
+          imagePrompt: p,
+          imageStyle: elements.globalStyle.imageStyle,
+        })),
+        ...elements.sections.flatMap((s) =>
+          (s.imagePrompts ?? []).map((p) => ({
+            sectionId: s.sectionId,
+            imagePrompt: p,
+            imageStyle: elements.globalStyle.imageStyle,
+          })),
+        ),
+      ];
+      const res = await fetch("/api/generate-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectName: project!.projectName,
+          conceptName: concept!.conceptName,
+          items,
+        }),
+      });
+      if (!res.ok) throw new Error("Image generation failed");
+      const data = (await res.json()) as { previews: GeneratedImagePreview[] };
+      saveImages(conceptId, data.previews);
+      setImagesVersion((v) => v + 1);
+    } catch (err) {
+      setImagesError((err as Error).message);
+    } finally {
+      setImagesLoading(false);
+    }
+  }
+
+
   return (
     <>
       <TopBar>
@@ -120,12 +233,32 @@ function ConceptDetail() {
               </div>
             </div>
             <div>
-              {concept.schema.sections.map((s) => (
-                <div key={s.id} id={`section-${s.id}`}>
-                  <SectionRenderer section={s} />
-                </div>
-              ))}
+              {concept.schema.sections.map((s) => {
+                const img = imageBySection[s.id];
+                return (
+                  <div key={s.id} id={`section-${s.id}`}>
+                    <SectionRenderer section={s} />
+                    {img && (
+                      <div className="px-10 pb-10 -mt-6">
+                        <div className="rounded-lg overflow-hidden ring-soft">
+                          <img
+                            src={img.previewUrl}
+                            alt="Section preview"
+                            className="w-full h-auto block"
+                            loading="lazy"
+                          />
+                          <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground">
+                            <span className="mono-tag">Preview image · Simulated</span>
+                            <span className="truncate max-w-[60%]">{img.imagePrompt}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
+
           </div>
         </main>
 
@@ -165,6 +298,28 @@ function ConceptDetail() {
               <div className="text-[13px] leading-relaxed">{meta.bestFor}</div>
             </div>
 
+            {(concept.whyThisWorks || concept.risksOrLimits || concept.bestFor) && (
+              <div className="space-y-3 mb-6">
+                {concept.whyThisWorks && (
+                  <RailBlock label="Why this works" body={concept.whyThisWorks} />
+                )}
+                {concept.bestFor && <RailBlock label="Best for" body={concept.bestFor} />}
+                {concept.risksOrLimits && (
+                  <RailBlock label="Risks & limits" body={concept.risksOrLimits} tone="muted" />
+                )}
+              </div>
+            )}
+
+            {research && (
+              <div className="p-3 bg-surface border border-border rounded-lg mb-6">
+                <div className="mono-tag text-muted-foreground mb-1">Research snapshot</div>
+                <div className="text-[12px] leading-relaxed line-clamp-4">
+                  {research.summary}
+                </div>
+              </div>
+            )}
+
+
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
                 <div className="mono-tag text-muted-foreground">Content outline</div>
@@ -195,6 +350,94 @@ function ConceptDetail() {
             </div>
 
             <div className="space-y-2 pt-4 border-t border-border">
+              <div className="mono-tag text-muted-foreground mb-1">Elements & visuals</div>
+              {!elements ? (
+                <button
+                  onClick={handleGenerateElements}
+                  disabled={elementsLoading}
+                  className="w-full h-10 text-[13px] font-medium bg-ink text-background rounded-md hover:opacity-90 disabled:opacity-60"
+                >
+                  {elementsLoading
+                    ? ["Breaking strategy into blocks…", "Writing headlines & CTAs…", "Preparing image prompts…", "Packaging elements…"][elementsStep] ?? "Working…"
+                    : "Get elements for this page"}
+                </button>
+              ) : (
+                <>
+                  <div className="p-3 bg-surface border border-border rounded-lg text-[12px]">
+                    <div className="mono-tag text-muted-foreground mb-1">Hero headline</div>
+                    <div className="font-medium mb-2 leading-snug">{elements.hero.headline}</div>
+                    <div className="text-muted-foreground leading-snug mb-2">
+                      {elements.hero.subheadline}
+                    </div>
+                    <div className="flex gap-1">
+                      <span className="mono-tag px-1.5 py-0.5 bg-ink text-background rounded">
+                        {elements.hero.primaryCTA}
+                      </span>
+                      {elements.hero.secondaryCTA && (
+                        <span className="mono-tag px-1.5 py-0.5 bg-surface-muted rounded">
+                          {elements.hero.secondaryCTA}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-surface border border-border rounded-lg text-[11px] leading-snug space-y-1">
+                    <div className="mono-tag text-muted-foreground mb-1">Global style</div>
+                    <div>· {elements.globalStyle.designMood}</div>
+                    <div>· {elements.globalStyle.imageStyle}</div>
+                    <div>· {elements.globalStyle.colorMood}</div>
+                    <div>· {elements.globalStyle.typographyMood}</div>
+                  </div>
+                  <button
+                    onClick={() => copy("elements", elements.copyExportText)}
+                    className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted"
+                  >
+                    {copied === "elements" ? "Copied ✓" : "Copy all elements"}
+                  </button>
+                  <button
+                    onClick={() =>
+                      copy(
+                        "prompts",
+                        [
+                          ...elements.hero.imagePrompts,
+                          ...elements.sections.flatMap((s) => s.imagePrompts ?? []),
+                        ].join("\n"),
+                      )
+                    }
+                    className="w-full h-9 text-[12px] font-medium text-muted-foreground hover:text-foreground border border-border rounded-md"
+                  >
+                    {copied === "prompts" ? "Copied ✓" : "Copy image prompts"}
+                  </button>
+                  <button
+                    onClick={handleGenerateImages}
+                    disabled={imagesLoading}
+                    className="w-full h-10 text-[13px] font-medium bg-accent text-background rounded-md hover:opacity-90 disabled:opacity-60"
+                  >
+                    {imagesLoading
+                      ? "Generating preview visuals…"
+                      : images.length > 0
+                        ? "↻ Regenerate images"
+                        : "Generate images"}
+                  </button>
+                  {images.length > 0 && (
+                    <div className="mono-tag text-muted-foreground text-center pt-1">
+                      {images.length} preview visuals attached · simulated
+                    </div>
+                  )}
+                </>
+              )}
+              {elementsError && (
+                <div className="p-2 text-[11px] bg-red-500/10 border border-red-500/30 rounded text-red-800">
+                  {elementsError}
+                </div>
+              )}
+              {imagesError && (
+                <div className="p-2 text-[11px] bg-red-500/10 border border-red-500/30 rounded text-red-800">
+                  {imagesError}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-border mt-4">
               <div className="mono-tag text-muted-foreground mb-1">Copy actions</div>
               <button
                 onClick={() => copy("outline", outlineText())}
@@ -210,7 +453,7 @@ function ConceptDetail() {
               </button>
               <button
                 onClick={() => copy("full", fullText())}
-                className="w-full h-9 text-[13px] font-medium bg-ink text-background rounded-md hover:opacity-90"
+                className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted"
               >
                 {copied === "full" ? "Copied ✓" : "Copy full page content"}
               </button>
@@ -228,6 +471,30 @@ function ConceptDetail() {
   );
 }
 
+function RailBlock({
+  label,
+  body,
+  tone,
+}: {
+  label: string;
+  body: string;
+  tone?: "muted";
+}) {
+  return (
+    <div
+      className={`p-3 border rounded-lg ${
+        tone === "muted"
+          ? "bg-surface-muted/60 border-border"
+          : "bg-surface border-border"
+      }`}
+    >
+      <div className="mono-tag text-muted-foreground mb-1">{label}</div>
+      <div className="text-[12px] leading-relaxed">{body}</div>
+    </div>
+  );
+}
+
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " ");
 }
+

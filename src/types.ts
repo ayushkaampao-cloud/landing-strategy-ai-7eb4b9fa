@@ -29,6 +29,7 @@ export interface Product {
 }
 
 export type ProjectGoal = "Sell product" | "Collect leads" | "Book calls";
+export type ProjectSourceMode = "url" | "brief";
 
 export interface Project {
   id: string;
@@ -37,6 +38,14 @@ export interface Project {
   projectName: string;
   goal: ProjectGoal;
   createdAt: string;
+  sourceMode?: ProjectSourceMode;
+  landingPageUrl?: string;
+  notes?: string;
+  tone?: string;
+  mainProblem?: string;
+  objections?: string;
+  competitor?: string;
+  desiredAngle?: string;
 }
 
 export interface BrandBrief {
@@ -81,6 +90,13 @@ export interface SectionProps {
   ctaLabel?: string;
   ctaSecondaryLabel?: string;
   items?: { title: string; body: string }[];
+  // New agentic fields
+  headline?: string;
+  subheadline?: string;
+  notes?: string;
+  imagePrompt?: string;
+  imageStyle?: string;
+  imageUrl?: string;
 }
 
 export interface LandingPageSchema {
@@ -91,6 +107,20 @@ export interface LandingPageSchema {
   sections: SectionProps[];
 }
 
+export interface ProjectResearch {
+  sourceMode: ProjectSourceMode;
+  summary: string;
+  competitorAngles: string[];
+  keywords: string[];
+  objections: string[];
+  trustSignals: string[];
+  positioningIdeas: string[];
+  imageStyleHints: string[];
+  toneSummary: string;
+  createdAt: string;
+  note?: string;
+}
+
 export interface LandingPageConcept {
   id: string;
   projectId: string;
@@ -98,8 +128,59 @@ export interface LandingPageConcept {
   conceptName: string;
   oneLineStrategy: string;
   bestTrafficType: string;
+  bestFor?: string;
+  whyThisWorks?: string;
+  risksOrLimits?: string;
+  tone?: string;
+  frameworkType?: TemplateFamily;
   schema: LandingPageSchema;
+  researchSnapshot?: string;
   createdAt: string;
+}
+
+export interface LandingPageElementsHero {
+  headline: string;
+  subheadline: string;
+  primaryCTA: string;
+  secondaryCTA?: string;
+  imagePrompts: string[];
+  visualDirection: string;
+}
+
+export interface LandingPageElementsSection {
+  sectionId: string;
+  sectionType: SectionType | string;
+  headline: string;
+  subheadline?: string;
+  body?: string;
+  bullets?: string[];
+  cta?: string;
+  imagePrompts: string[];
+  visualDirection?: string;
+  implementationNote?: string;
+}
+
+export interface LandingPageElements {
+  conceptId: string;
+  hero: LandingPageElementsHero;
+  sections: LandingPageElementsSection[];
+  globalStyle: {
+    designMood: string;
+    imageStyle: string;
+    colorMood: string;
+    typographyMood: string;
+    layoutMood: string;
+  };
+  copyExportText: string;
+  createdAt: string;
+}
+
+export interface GeneratedImagePreview {
+  sectionId: string;
+  imagePrompt: string;
+  imageStyle: string;
+  previewUrl: string;
+  status: "simulated" | "generated";
 }
 
 export interface GenerationRun {
