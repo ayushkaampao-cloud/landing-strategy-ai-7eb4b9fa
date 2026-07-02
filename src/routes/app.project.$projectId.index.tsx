@@ -26,16 +26,36 @@ function ProjectGallery() {
   if (projectConcepts.length === 0) {
     return (
       <>
-        <TopBar />
-        <div className="p-8">
-          <p className="text-sm text-muted-foreground mb-4">No concepts generated yet.</p>
-          <Link
-            to="/app/project/$projectId/generating"
-            params={{ projectId }}
-            className="inline-flex items-center px-4 py-2 bg-ink text-background text-sm font-medium rounded-md"
-          >
-            Generate
-          </Link>
+        <TopBar>
+          <span className="mono-tag text-muted-foreground">{project.goal}</span>
+        </TopBar>
+        <div className="p-8 max-w-3xl">
+          <div className="mono-tag text-muted-foreground mb-2">Project</div>
+          <h1 className="text-3xl font-semibold tracking-tight mb-1">
+            {project.projectName}
+          </h1>
+          <p className="text-muted-foreground text-sm mb-10">
+            {product?.name} · {project.goal}
+          </p>
+
+          <div className="p-10 bg-surface border border-border rounded-xl">
+            <div className="mono-tag text-accent mb-3">Ready to generate</div>
+            <h2 className="text-xl font-semibold tracking-tight mb-2">
+              Five distinct landing page strategies for {product?.name}
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed max-w-lg">
+              We'll build one concept per framework — Performance, A+ Product Story,
+              Deep Conversion, Brand Story, and Trust & Comparison — each with a
+              full section-level schema you can read, copy, and ship.
+            </p>
+            <Link
+              to="/app/project/$projectId/generating"
+              params={{ projectId }}
+              className="inline-flex items-center h-11 px-6 bg-ink text-background text-sm font-medium rounded-md hover:opacity-90"
+            >
+              Generate 5 landing page strategies →
+            </Link>
+          </div>
         </div>
       </>
     );
