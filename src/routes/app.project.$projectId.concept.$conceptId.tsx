@@ -3,7 +3,10 @@ import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, generateConceptsForProject } from "@/lib/generator";
 import { SectionRenderer } from "@/components/SectionRenderer";
+import { GroundingBadge } from "@/components/GroundingBadge";
+import { generateRealImage } from "@/lib/puter";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { GeneratedImagePreview, LandingPageElements } from "@/types";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
