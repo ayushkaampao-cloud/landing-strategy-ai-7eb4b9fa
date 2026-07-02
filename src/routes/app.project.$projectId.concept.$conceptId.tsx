@@ -348,15 +348,44 @@ function ConceptDetail() {
                     {img && (
                       <div className="px-10 pb-10 -mt-6">
                         <div className="rounded-lg overflow-hidden ring-soft">
-                          <img
-                            src={img.previewUrl}
-                            alt="Section preview"
-                            className="w-full h-auto block"
-                            loading="lazy"
-                          />
-                          <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground">
-                            <span className="mono-tag">Preview image · Simulated</span>
-                            <span className="truncate max-w-[60%]">{img.imagePrompt}</span>
+                          <div className="relative">
+                            <img
+                              src={img.realUrl ?? img.previewUrl}
+                              alt="Section preview"
+                              className={`w-full h-auto block ${realGenerating[s.id] ? "opacity-60" : ""}`}
+                              loading="lazy"
+                            />
+                            {realGenerating[s.id] && (
+                              <div className="absolute inset-0 grid place-items-center bg-background/40">
+                                <span className="mono-tag px-2 py-1 rounded bg-background/80 ring-soft">
+                                  Generating…
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground gap-2">
+                            <span className="mono-tag">
+                              {img.status === "real"
+                                ? "Real image · AI-generated"
+                                : img.status === "failed"
+                                  ? "Generation failed — using placeholder"
+                                  : "Preview image · Simulated"}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {img.status !== "real" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleGenerateRealImage(s.id)}
+                                  disabled={!!realGenerating[s.id]}
+                                  className="mono-tag px-2 py-0.5 rounded bg-ink text-background hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {realGenerating[s.id] ? "Generating…" : "Generate real image"}
+                                </button>
+                              )}
+                              <span className="truncate max-w-[40%]" title={img.imagePrompt}>
+                                {img.imagePrompt}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
