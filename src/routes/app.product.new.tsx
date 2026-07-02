@@ -243,6 +243,9 @@ function NewProduct() {
               optional
             />
           </div>
+
+          <div className="pt-6 mt-6 border-t border-border">
+            <h2 className="text-lg font-semibold mb-4 tracking-tight">Project</h2>
             <Field
               label="Project name"
               value={projectName}
