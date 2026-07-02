@@ -20,6 +20,7 @@ import { Route as ApiResearchProjectRouteImport } from './routes/api/research-pr
 import { Route as ApiGenerateStrategiesRouteImport } from './routes/api/generate-strategies'
 import { Route as ApiGenerateImagesRouteImport } from './routes/api/generate-images'
 import { Route as ApiGenerateElementsRouteImport } from './routes/api/generate-elements'
+import { Route as ApiDebugLlmRouteImport } from './routes/api/debug-llm'
 import { Route as AppProductNewRouteImport } from './routes/app.product.new'
 import { Route as AppBrandNewRouteImport } from './routes/app.brand.new'
 import { Route as AppProjectProjectIdIndexRouteImport } from './routes/app.project.$projectId.index'
@@ -81,6 +82,11 @@ const ApiGenerateElementsRoute = ApiGenerateElementsRouteImport.update({
   path: '/api/generate-elements',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDebugLlmRoute = ApiDebugLlmRouteImport.update({
+  id: '/api/debug-llm',
+  path: '/api/debug-llm',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppProductNewRoute = AppProductNewRouteImport.update({
   id: '/product/new',
   path: '/product/new',
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/api/debug-llm': typeof ApiDebugLlmRoute
   '/api/generate-elements': typeof ApiGenerateElementsRoute
   '/api/generate-images': typeof ApiGenerateImagesRoute
   '/api/generate-strategies': typeof ApiGenerateStrategiesRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/api/debug-llm': typeof ApiDebugLlmRoute
   '/api/generate-elements': typeof ApiGenerateElementsRoute
   '/api/generate-images': typeof ApiGenerateImagesRoute
   '/api/generate-strategies': typeof ApiGenerateStrategiesRoute
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/api/debug-llm': typeof ApiDebugLlmRoute
   '/api/generate-elements': typeof ApiGenerateElementsRoute
   '/api/generate-images': typeof ApiGenerateImagesRoute
   '/api/generate-strategies': typeof ApiGenerateStrategiesRoute
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/api/debug-llm'
     | '/api/generate-elements'
     | '/api/generate-images'
     | '/api/generate-strategies'
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/api/debug-llm'
     | '/api/generate-elements'
     | '/api/generate-images'
     | '/api/generate-strategies'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/api/debug-llm'
     | '/api/generate-elements'
     | '/api/generate-images'
     | '/api/generate-strategies'
@@ -224,6 +236,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiDebugLlmRoute: typeof ApiDebugLlmRoute
   ApiGenerateElementsRoute: typeof ApiGenerateElementsRoute
   ApiGenerateImagesRoute: typeof ApiGenerateImagesRoute
   ApiGenerateStrategiesRoute: typeof ApiGenerateStrategiesRoute
@@ -309,6 +322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGenerateElementsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/debug-llm': {
+      id: '/api/debug-llm'
+      path: '/api/debug-llm'
+      fullPath: '/api/debug-llm'
+      preLoaderRoute: typeof ApiDebugLlmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/product/new': {
       id: '/app/product/new'
       path: '/product/new'
@@ -378,6 +398,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiDebugLlmRoute: ApiDebugLlmRoute,
   ApiGenerateElementsRoute: ApiGenerateElementsRoute,
   ApiGenerateImagesRoute: ApiGenerateImagesRoute,
   ApiGenerateStrategiesRoute: ApiGenerateStrategiesRoute,

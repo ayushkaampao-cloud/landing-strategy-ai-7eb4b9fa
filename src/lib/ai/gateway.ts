@@ -1,10 +1,13 @@
-// Server-only LLM helpers for Lovable AI Gateway (Gemini) with optional
-// OpenRouter fallback. All calls run inside TanStack server routes.
+// Server-only LLM helpers with 3-tier provider fallback.
+// Order: gemini_direct (GEMINI_API_KEY) → lovable_gateway (LOVABLE_API_KEY) → openrouter (OPENROUTER_API_KEY).
+// Function signatures are preserved so no callers change.
 
-const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const LOVABLE_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const GEMINI_DIRECT_MODEL = "gemini-2.5-flash";
+const GEMINI_DIRECT_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_DIRECT_MODEL}:generateContent`;
 
-const DEFAULT_MODEL = "google/gemini-3-flash-preview";
+const LOVABLE_MODEL = "google/gemini-3-flash-preview";
 const OPENROUTER_MODEL = "google/gemini-2.5-flash";
 
 export interface LLMOptions {
@@ -14,11 +17,49 @@ export interface LLMOptions {
   json?: boolean;
 }
 
-async function callGemini(prompt: string, opts: LLMOptions): Promise<string> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("LOVABLE_API_KEY is not configured");
+type ProviderName = "gemini_direct" | "lovable_gateway" | "openrouter";
+
+async function callGeminiDirect(prompt: string, opts: LLMOptions): Promise<string> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY not configured");
+
   const body: Record<string, unknown> = {
-    model: DEFAULT_MODEL,
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: opts.temperature ?? 0.8,
+      ...(opts.maxTokens ? { maxOutputTokens: opts.maxTokens } : {}),
+      ...(opts.json ? { responseMimeType: "application/json" } : {}),
+    },
+  };
+  if (opts.system) {
+    body.systemInstruction = { parts: [{ text: opts.system }] };
+  }
+
+  const res = await fetch(`${GEMINI_DIRECT_URL}?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`gemini_direct ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
+  const text = data.candidates?.[0]?.content?.parts
+    ?.map((p) => p.text ?? "")
+    .join("")
+    .trim();
+  if (!text) throw new Error("gemini_direct: empty response");
+  return text;
+}
+
+async function callLovableGateway(prompt: string, opts: LLMOptions): Promise<string> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("LOVABLE_API_KEY not configured");
+  const body: Record<string, unknown> = {
+    model: LOVABLE_MODEL,
     messages: [
       ...(opts.system ? [{ role: "system", content: opts.system }] : []),
       { role: "user", content: prompt },
@@ -27,7 +68,7 @@ async function callGemini(prompt: string, opts: LLMOptions): Promise<string> {
   };
   if (opts.json) body.response_format = { type: "json_object" };
 
-  const res = await fetch(GATEWAY_URL, {
+  const res = await fetch(LOVABLE_GATEWAY_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -37,12 +78,14 @@ async function callGemini(prompt: string, opts: LLMOptions): Promise<string> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Gemini ${res.status}: ${text.slice(0, 200)}`);
+    throw new Error(`lovable_gateway ${res.status}: ${text.slice(0, 200)}`);
   }
   const data = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
   };
-  return data.choices?.[0]?.message?.content ?? "";
+  const text = data.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error("lovable_gateway: empty response");
+  return text;
 }
 
 async function callOpenRouter(prompt: string, opts: LLMOptions): Promise<string> {
@@ -66,42 +109,85 @@ async function callOpenRouter(prompt: string, opts: LLMOptions): Promise<string>
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`);
+    throw new Error(`openrouter ${res.status}: ${text.slice(0, 200)}`);
   }
   const data = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
   };
-  return data.choices?.[0]?.message?.content ?? "";
+  const text = data.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error("openrouter: empty response");
+  return text;
 }
 
-/** Try Gemini first, fall back to OpenRouter if available. */
-export async function callLLM(prompt: string, opts: LLMOptions = {}): Promise<string> {
-  try {
-    return await callGemini(prompt, opts);
-  } catch (err) {
-    if (process.env.OPENROUTER_API_KEY) {
-      try {
-        return await callOpenRouter(prompt, opts);
-      } catch {
-        throw err; // surface original Gemini error
-      }
+interface AttemptResult {
+  provider: ProviderName;
+  text: string;
+}
+
+/** Run the fallback chain. Optional `skip` list is used by the debug route. */
+async function runChain(
+  prompt: string,
+  opts: LLMOptions,
+  skip: Set<ProviderName> = new Set(),
+): Promise<AttemptResult> {
+  const attempts: { name: ProviderName; run: (p: string, o: LLMOptions) => Promise<string> }[] = [
+    { name: "gemini_direct", run: callGeminiDirect },
+    { name: "lovable_gateway", run: callLovableGateway },
+    { name: "openrouter", run: callOpenRouter },
+  ];
+
+  const errors: string[] = [];
+  for (const attempt of attempts) {
+    if (skip.has(attempt.name)) continue;
+    const started = Date.now();
+    try {
+      const text = await attempt.run(prompt, opts);
+      const ms = Date.now() - started;
+      console.log("[llm]", { provider: attempt.name, ok: true, ms });
+      return { provider: attempt.name, text };
+    } catch (err) {
+      const reason = (err as Error).message || String(err);
+      const ms = Date.now() - started;
+      console.warn("[llm] fallback", { from: attempt.name, ms, reason });
+      errors.push(`${attempt.name}: ${reason}`);
     }
-    throw err;
   }
+  throw new Error(`All LLM providers failed. ${errors.join(" | ")}`);
 }
 
-/** Call model expecting JSON; extract first {...} block and parse. */
+export async function callLLM(prompt: string, opts: LLMOptions = {}): Promise<string> {
+  const { text } = await runChain(prompt, opts);
+  return text;
+}
+
 export async function callLLMJson<T = unknown>(
   prompt: string,
   opts: LLMOptions = {},
 ): Promise<T> {
-  const raw = await callLLM(prompt, { ...opts, json: true });
-  return extractJson<T>(raw);
+  // Run the chain but treat a JSON-parse failure on one tier as a tier failure
+  // and continue. We do this by threading `skip` through repeated attempts.
+  const skip = new Set<ProviderName>();
+  let lastErr: unknown;
+  for (let i = 0; i < 3; i++) {
+    let attempt: AttemptResult;
+    try {
+      attempt = await runChain(prompt, { ...opts, json: true }, skip);
+    } catch (err) {
+      throw err;
+    }
+    try {
+      return extractJson<T>(attempt.text);
+    } catch (err) {
+      console.warn("[llm] json_parse_failed", { provider: attempt.provider });
+      skip.add(attempt.provider);
+      lastErr = err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("All providers returned unparseable JSON");
 }
 
 export function extractJson<T = unknown>(raw: string): T {
   const trimmed = raw.trim();
-  // Strip common code fences
   const fenceStripped = trimmed
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
@@ -111,7 +197,6 @@ export function extractJson<T = unknown>(raw: string): T {
   } catch {
     // fall through
   }
-  // find first { and last } / first [ and last ]
   const firstBrace = fenceStripped.indexOf("{");
   const firstBracket = fenceStripped.indexOf("[");
   const start =
@@ -128,4 +213,12 @@ export function extractJson<T = unknown>(raw: string): T {
     return JSON.parse(slice) as T;
   }
   throw new Error("Model did not return JSON");
+}
+
+/** Debug helper used by /api/debug-llm. Returns which provider won. */
+export async function _debugCall(
+  prompt: string,
+  skip: ProviderName[] = [],
+): Promise<{ provider: ProviderName; text: string }> {
+  return runChain(prompt, { json: true, temperature: 0.2 }, new Set(skip));
 }
