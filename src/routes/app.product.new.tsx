@@ -275,9 +275,10 @@ function NewProduct() {
 
           <button
             type="submit"
-            className="h-11 px-6 bg-ink text-background font-medium rounded-md text-sm"
+            disabled={analyzing}
+            className="h-11 px-6 bg-ink text-background font-medium rounded-md text-sm disabled:opacity-60"
           >
-            Run research & generate 5 directions →
+            {analyzing ? "Analyzing product images…" : "Run research & generate 5 directions →"}
           </button>
         </form>
       </div>
