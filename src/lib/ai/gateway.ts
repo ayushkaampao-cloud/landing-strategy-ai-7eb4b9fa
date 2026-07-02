@@ -71,7 +71,18 @@ async function callLovableGateway(prompt: string, opts: LLMOptions): Promise<str
     ],
     temperature: opts.temperature ?? 0.8,
   };
-  if (opts.json) body.response_format = { type: "json_object" };
+  if (opts.responseSchema) {
+    body.response_format = {
+      type: "json_schema",
+      json_schema: {
+        name: opts.schemaName ?? "Output",
+        schema: opts.responseSchema,
+        strict: true,
+      },
+    };
+  } else if (opts.json) {
+    body.response_format = { type: "json_object" };
+  }
 
   const res = await fetch(LOVABLE_GATEWAY_URL, {
     method: "POST",
