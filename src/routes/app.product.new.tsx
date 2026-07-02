@@ -12,7 +12,7 @@ export const Route = createFileRoute("/app/product/new")({
 const GOALS: ProjectGoal[] = ["Sell product", "Collect leads", "Book calls"];
 
 function NewProduct() {
-  const { activeWorkspace, createProduct, createProject } = useStore();
+  const { activeWorkspace, createProduct, createProject, saveProductImages, saveVisualProfile } = useStore();
   const navigate = useNavigate();
 
   const [sourceMode, setSourceMode] = useState<ProjectSourceMode>("brief");
