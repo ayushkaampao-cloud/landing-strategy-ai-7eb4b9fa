@@ -17,7 +17,14 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const { signIn, workspaces } = useStore();
+  const {
+    signIn,
+    workspaces,
+    createWorkspace,
+    createProduct,
+    createProject,
+    saveConcepts,
+  } = useStore();
   const navigate = useNavigate();
 
   const onSubmit = (e: FormEvent) => {
@@ -29,6 +36,41 @@ function AuthPage() {
       if (workspaces.length === 0) navigate({ to: "/app/brand/new" });
       else navigate({ to: "/app" });
     }, 30);
+  };
+
+  const loadDemo = async () => {
+    signIn("demo@northlight.co", "Demo Operator");
+    const ws = createWorkspace({
+      name: "Northlight Coffee",
+      brandDescription:
+        "Small-batch specialty coffee subscription for home espresso obsessives. Direct trade beans, roasted weekly, shipped fresh.",
+      brandVoice: ["Confident", "Warm", "Craft"],
+      primaryAudience:
+        "Home baristas 28-45 who own a prosumer espresso machine and care about origin, freshness, and roast date.",
+    });
+    const product = createProduct({
+      workspaceId: ws.id,
+      name: "The Daily Espresso Subscription",
+      shortDescription:
+        "A rotating 12oz bag of single-origin espresso, roasted the day it ships. Delivered weekly, biweekly, or monthly.",
+      keyFeatures:
+        "Roasted-to-order · Single origin rotation · Flavor notes card · Grind-on-demand · Skip or pause anytime",
+      keyBenefits:
+        "Always fresh coffee, discover new origins, no more stale supermarket bags, dial-in guidance included.",
+      priceInfo: "From $22/bag · Free shipping over $40 · Cancel anytime",
+      productUrl: "https://northlight.example/espresso",
+      siteUrl: "https://northlight.example",
+    });
+    const project = createProject({
+      workspaceId: ws.id,
+      productId: product.id,
+      projectName: "Q3 Paid Social Launch",
+      goal: "Sell product",
+    });
+    const { generateConceptsForProject } = await import("@/lib/generator");
+    const concepts = generateConceptsForProject(ws, product, project);
+    saveConcepts(project.id, concepts);
+    setTimeout(() => navigate({ to: "/app/projects" }), 30);
   };
 
   return (
@@ -111,6 +153,31 @@ function AuthPage() {
               {mode === "signup" ? "Create account" : "Sign in"}
             </button>
           </form>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="mono-tag bg-background px-2 text-muted-foreground">
+                or
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={loadDemo}
+            className="w-full h-10 rounded-md border border-border bg-surface text-sm font-medium hover:bg-surface-muted flex items-center justify-center gap-2"
+          >
+            <span>Try the demo account</span>
+            <span className="mono-tag text-accent">preloaded</span>
+          </button>
+          <p className="mono-tag text-muted-foreground mt-3 text-center leading-relaxed">
+            Signs you in as Northlight Coffee with 1 product,<br />
+            1 project, and 5 generated concepts ready to explore.
+          </p>
+
           <p className="mono-tag text-muted-foreground mt-6 text-center">
             Local-only demo · no real auth yet
           </p>
