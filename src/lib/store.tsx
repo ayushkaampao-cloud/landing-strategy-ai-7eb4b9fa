@@ -71,6 +71,11 @@ interface StoreContextValue extends AppData {
     input: Omit<Project, "id" | "createdAt">,
   ) => Project;
   saveConcepts: (projectId: string, concepts: LandingPageConcept[]) => void;
+  updateConceptSection: (
+    conceptId: string,
+    sectionId: string,
+    patch: Partial<import("@/types").SectionProps>,
+  ) => void;
   deleteProject: (projectId: string) => void;
   deleteWorkspace: (workspaceId: string) => void;
   activeWorkspace: Workspace | null;
@@ -183,6 +188,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...d.concepts.filter((c) => c.projectId !== projectId),
           ...concepts,
         ],
+      }));
+    },
+    [],
+  );
+
+  const updateConceptSection = useCallback<StoreContextValue["updateConceptSection"]>(
+    (conceptId, sectionId, patch) => {
+      setData((d) => ({
+        ...d,
+        concepts: d.concepts.map((c) => {
+          if (c.id !== conceptId) return c;
+          const sections = c.schema.sections.map((s) =>
+            s.id === sectionId ? { ...s, ...patch } : s,
+          );
+          return { ...c, schema: { ...c.schema, sections } };
+        }),
       }));
     },
     [],
