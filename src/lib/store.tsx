@@ -775,7 +775,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value: StoreContextValue = {
     ...data,
     activeWorkspace,
-    signIn,
+    signUp,
     signUp,
     signInWithPassword,
     signOut,
