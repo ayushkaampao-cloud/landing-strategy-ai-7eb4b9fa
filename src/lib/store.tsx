@@ -265,6 +265,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     createProduct,
     createProject,
     saveConcepts,
+    updateConceptSection,
     deleteProject,
     deleteWorkspace,
     version,
