@@ -132,6 +132,9 @@ function AuthPage() {
           <p className="mono-tag text-muted-foreground mt-6 text-center">
             Secured by Lovable Cloud
           </p>
+          <p className="mono-tag text-[10px] text-muted-foreground/50 mt-2 text-center truncate">
+            {import.meta.env.VITE_SUPABASE_URL ?? "No Supabase URL configured"}
+          </p>
         </div>
       </div>
     </div>
