@@ -202,6 +202,3 @@ export function AppShell() {
     </div>
   );
 }
-
-  );
-}
