@@ -397,7 +397,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = signInWithPassword;
+  
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
