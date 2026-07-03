@@ -14,7 +14,277 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      brands: {
+        Row: {
+          brand_voice: Json | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          primary_audience: string | null
+          user_id: string
+        }
+        Insert: {
+          brand_voice?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          primary_audience?: string | null
+          user_id: string
+        }
+        Update: {
+          brand_voice?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          primary_audience?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      concepts: {
+        Row: {
+          concept_data: Json
+          created_at: string
+          framework_name: string
+          id: string
+          project_id: string
+        }
+        Insert: {
+          concept_data: Json
+          created_at?: string
+          framework_name: string
+          id?: string
+          project_id: string
+        }
+        Update: {
+          concept_data?: Json
+          created_at?: string
+          framework_name?: string
+          id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concepts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      elements: {
+        Row: {
+          body_copy: string | null
+          bullets: Json | null
+          concept_id: string
+          created_at: string
+          cta_label: string | null
+          headline: string | null
+          id: string
+          image_mode: string | null
+          image_prompt: string | null
+          is_edited: boolean
+          negative_prompt: string | null
+          section_id: string
+          subheadline: string | null
+        }
+        Insert: {
+          body_copy?: string | null
+          bullets?: Json | null
+          concept_id: string
+          created_at?: string
+          cta_label?: string | null
+          headline?: string | null
+          id?: string
+          image_mode?: string | null
+          image_prompt?: string | null
+          is_edited?: boolean
+          negative_prompt?: string | null
+          section_id: string
+          subheadline?: string | null
+        }
+        Update: {
+          body_copy?: string | null
+          bullets?: Json | null
+          concept_id?: string
+          created_at?: string
+          cta_label?: string | null
+          headline?: string | null
+          id?: string
+          image_mode?: string | null
+          image_prompt?: string | null
+          is_edited?: boolean
+          negative_prompt?: string | null
+          section_id?: string
+          subheadline?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "elements_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "concepts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      image_previews: {
+        Row: {
+          created_at: string
+          element_id: string
+          id: string
+          metadata: Json | null
+          preview_url: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          element_id: string
+          id?: string
+          metadata?: Json | null
+          preview_url?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          element_id?: string
+          id?: string
+          metadata?: Json | null
+          preview_url?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "image_previews_element_id_fkey"
+            columns: ["element_id"]
+            isOneToOne: false
+            referencedRelation: "elements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_visual_profiles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          profile: Json | null
+          project_id: string
+          source_image_urls: Json | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          profile?: Json | null
+          project_id: string
+          source_image_urls?: Json | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          profile?: Json | null
+          project_id?: string
+          source_image_urls?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_visual_profiles_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          brand_id: string
+          classification: Json | null
+          competitor: string | null
+          created_at: string
+          desired_angle: string | null
+          goal: string | null
+          id: string
+          key_benefits: string | null
+          key_features: string | null
+          landing_page_url: string | null
+          main_problem: string | null
+          notes: string | null
+          objections: string | null
+          price_info: string | null
+          product_description: string | null
+          product_name: string | null
+          product_url: string | null
+          project_name: string
+          research: Json | null
+          site_url: string | null
+          source_mode: string | null
+          tone: string | null
+        }
+        Insert: {
+          brand_id: string
+          classification?: Json | null
+          competitor?: string | null
+          created_at?: string
+          desired_angle?: string | null
+          goal?: string | null
+          id?: string
+          key_benefits?: string | null
+          key_features?: string | null
+          landing_page_url?: string | null
+          main_problem?: string | null
+          notes?: string | null
+          objections?: string | null
+          price_info?: string | null
+          product_description?: string | null
+          product_name?: string | null
+          product_url?: string | null
+          project_name: string
+          research?: Json | null
+          site_url?: string | null
+          source_mode?: string | null
+          tone?: string | null
+        }
+        Update: {
+          brand_id?: string
+          classification?: Json | null
+          competitor?: string | null
+          created_at?: string
+          desired_angle?: string | null
+          goal?: string | null
+          id?: string
+          key_benefits?: string | null
+          key_features?: string | null
+          landing_page_url?: string | null
+          main_problem?: string | null
+          notes?: string | null
+          objections?: string | null
+          price_info?: string | null
+          product_description?: string | null
+          product_name?: string | null
+          product_url?: string | null
+          project_name?: string
+          research?: Json | null
+          site_url?: string | null
+          source_mode?: string | null
+          tone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
