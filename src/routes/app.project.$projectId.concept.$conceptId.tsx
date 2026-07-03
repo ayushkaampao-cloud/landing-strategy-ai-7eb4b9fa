@@ -478,6 +478,16 @@ function ConceptDetail() {
               </div>
             )}
 
+            <div className="mb-6">
+              <VisualProfileSummary
+                profile={visualProfile}
+                imageCount={productImages.length}
+                compact
+              />
+            </div>
+
+
+
 
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
