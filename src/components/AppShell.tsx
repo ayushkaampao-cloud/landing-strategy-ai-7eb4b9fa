@@ -119,6 +119,11 @@ function Sidebar() {
             Exit
           </button>
         </div>
+        <div className="px-2 pt-3">
+          <p className="mono-tag text-[10px] text-muted-foreground/50 truncate" title={import.meta.env.VITE_SUPABASE_URL}>
+            {import.meta.env.VITE_SUPABASE_URL ?? "No Supabase URL"}
+          </p>
+        </div>
       </div>
     </aside>
   );
