@@ -57,7 +57,6 @@ const empty: AppData = {
 };
 
 interface StoreContextValue extends AppData {
-  signIn: (email: string, name?: string) => Promise<User | null>;
   signUp: (email: string, password: string, name?: string) => Promise<User | null>;
   signInWithPassword: (email: string, password: string) => Promise<User | null>;
   signOut: () => Promise<void>;
