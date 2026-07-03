@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -19,7 +20,9 @@ import type {
   User,
   Workspace,
 } from "@/types";
-import { storage } from "./storage";
+import { supabase } from "@/integrations/supabase/client";
+
+const LEGACY_STORAGE_KEY = "landing-page-ai-v1";
 
 interface AppData {
   user: User | null;
@@ -28,9 +31,14 @@ interface AppData {
   projects: Project[];
   concepts: LandingPageConcept[];
   activeWorkspaceId: string | null;
+  research: Record<string, ProjectResearch>;
+  elements: Record<string, LandingPageElements>;
+  images: Record<string, GeneratedImagePreview[]>;
+  productImages: Record<string, ProductImageRef[]>;
+  visualProfile: Record<string, ProductVisualProfile | null>;
+  elementRowIdByConcept: Record<string, string>; // concept.id -> elements table row id
+  loaded: boolean;
 }
-
-const STORAGE_KEY = "landing-page-ai-v1";
 
 const empty: AppData = {
   user: null,
@@ -39,37 +47,26 @@ const empty: AppData = {
   projects: [],
   concepts: [],
   activeWorkspaceId: null,
+  research: {},
+  elements: {},
+  images: {},
+  productImages: {},
+  visualProfile: {},
+  elementRowIdByConcept: {},
+  loaded: false,
 };
 
-function load(): AppData {
-  if (typeof window === "undefined") return empty;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return empty;
-    return { ...empty, ...(JSON.parse(raw) as Partial<AppData>) };
-  } catch {
-    return empty;
-  }
-}
-
-function save(data: AppData) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
 interface StoreContextValue extends AppData {
-  signIn: (email: string, name?: string) => User;
-  signOut: () => void;
+  signIn: (email: string, name?: string) => Promise<User | null>;
+  signUp: (email: string, password: string, name?: string) => Promise<User | null>;
+  signInWithPassword: (email: string, password: string) => Promise<User | null>;
+  signOut: () => Promise<void>;
   createWorkspace: (
     input: Omit<Workspace, "id" | "ownerId" | "createdAt">,
   ) => Workspace;
   setActiveWorkspace: (id: string) => void;
-  createProduct: (
-    input: Omit<Product, "id" | "createdAt">,
-  ) => Product;
-  createProject: (
-    input: Omit<Project, "id" | "createdAt">,
-  ) => Project;
+  createProduct: (input: Omit<Product, "id" | "createdAt">) => Product;
+  createProject: (input: Omit<Project, "id" | "createdAt">) => Project;
   saveConcepts: (projectId: string, concepts: LandingPageConcept[]) => void;
   updateConceptSection: (
     conceptId: string,
@@ -79,7 +76,6 @@ interface StoreContextValue extends AppData {
   deleteProject: (projectId: string) => void;
   deleteWorkspace: (workspaceId: string) => void;
   activeWorkspace: Workspace | null;
-  // Research / elements / images (persisted via storage helper)
   getResearch: (projectId: string) => ProjectResearch | null;
   saveResearch: (projectId: string, r: ProjectResearch) => void;
   getElements: (conceptId: string) => LandingPageElements | null;
@@ -90,8 +86,10 @@ interface StoreContextValue extends AppData {
   saveProductImages: (projectId: string, imgs: ProductImageRef[]) => void;
   getVisualProfile: (projectId: string) => ProductVisualProfile | null;
   saveVisualProfile: (projectId: string, p: ProductVisualProfile | null) => void;
-  // For dashboard status
   version: number;
+  legacyImportPending: boolean;
+  importLegacyData: () => Promise<void>;
+  dismissLegacyImport: () => void;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -101,43 +99,320 @@ const uid = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
 
+function projectRowToPair(row: any): { project: Project; product: Product } {
+  const project: Project = {
+    id: row.id,
+    workspaceId: row.brand_id,
+    productId: row.id, // 1:1
+    projectName: row.project_name,
+    goal: (row.goal ?? "Sell product") as Project["goal"],
+    createdAt: row.created_at,
+    sourceMode: row.source_mode ?? undefined,
+    landingPageUrl: row.landing_page_url ?? undefined,
+    notes: row.notes ?? undefined,
+    tone: row.tone ?? undefined,
+    mainProblem: row.main_problem ?? undefined,
+    objections: row.objections ?? undefined,
+    competitor: row.competitor ?? undefined,
+    desiredAngle: row.desired_angle ?? undefined,
+  };
+  const product: Product = {
+    id: row.id,
+    workspaceId: row.brand_id,
+    name: row.product_name ?? "",
+    shortDescription: row.product_description ?? "",
+    keyFeatures: row.key_features ?? "",
+    keyBenefits: row.key_benefits ?? "",
+    priceInfo: row.price_info ?? "",
+    productUrl: row.product_url ?? undefined,
+    siteUrl: row.site_url ?? undefined,
+    createdAt: row.created_at,
+  };
+  return { project, product };
+}
+
+function projectToRow(project: Project, product: Product | undefined) {
+  return {
+    id: project.id,
+    brand_id: project.workspaceId,
+    project_name: project.projectName,
+    product_name: product?.name ?? null,
+    product_description: product?.shortDescription ?? null,
+    key_features: product?.keyFeatures ?? null,
+    key_benefits: product?.keyBenefits ?? null,
+    price_info: product?.priceInfo ?? null,
+    product_url: product?.productUrl ?? null,
+    site_url: product?.siteUrl ?? null,
+    goal: project.goal,
+    tone: project.tone ?? null,
+    notes: project.notes ?? null,
+    source_mode: project.sourceMode ?? null,
+    landing_page_url: project.landingPageUrl ?? null,
+    main_problem: project.mainProblem ?? null,
+    objections: project.objections ?? null,
+    competitor: project.competitor ?? null,
+    desired_angle: project.desiredAngle ?? null,
+  };
+}
+
+function brandRowToWorkspace(row: any): Workspace {
+  return {
+    id: row.id,
+    ownerId: row.user_id,
+    name: row.name,
+    brandDescription: row.description ?? "",
+    brandVoice: Array.isArray(row.brand_voice) ? row.brand_voice : [],
+    primaryAudience: row.primary_audience ?? "",
+    createdAt: row.created_at,
+  };
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(empty);
-  const [hydrated, setHydrated] = useState(false);
-
+  const [version, setVersion] = useState(0);
+  const [legacyImportPending, setLegacyImportPending] = useState(false);
+  const bump = useCallback(() => setVersion((v) => v + 1), []);
+  const dataRef = useRef(data);
   useEffect(() => {
-    setData(load());
-    setHydrated(true);
-  }, []);
+    dataRef.current = data;
+  }, [data]);
 
-  useEffect(() => {
-    if (hydrated) save(data);
-  }, [data, hydrated]);
+  const loadUserData = useCallback(async (user: User) => {
+    // brands
+    const { data: brands } = await supabase
+      .from("brands")
+      .select("*")
+      .order("created_at", { ascending: true });
+    const workspaces: Workspace[] = (brands ?? []).map(brandRowToWorkspace);
 
-  const signIn = useCallback((email: string, name?: string): User => {
-    const user: User = {
-      id: uid(),
-      email,
-      name: name ?? email.split("@")[0],
-      createdAt: new Date().toISOString(),
-    };
-    setData((d) => ({ ...d, user }));
-    return user;
-  }, []);
-
-  const signOut = useCallback(() => {
-    setData(empty);
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(STORAGE_KEY);
+    // projects
+    const brandIds = workspaces.map((w) => w.id);
+    let projects: Project[] = [];
+    let products: Product[] = [];
+    let researchMap: Record<string, ProjectResearch> = {};
+    let projectIds: string[] = [];
+    if (brandIds.length > 0) {
+      const { data: projRows } = await supabase
+        .from("projects")
+        .select("*")
+        .in("brand_id", brandIds)
+        .order("created_at", { ascending: true });
+      (projRows ?? []).forEach((r: any) => {
+        const { project, product } = projectRowToPair(r);
+        projects.push(project);
+        products.push(product);
+        if (r.research) researchMap[project.id] = r.research as ProjectResearch;
+      });
+      projectIds = projects.map((p) => p.id);
     }
+
+    // concepts
+    let concepts: LandingPageConcept[] = [];
+    let conceptIds: string[] = [];
+    if (projectIds.length > 0) {
+      const { data: conceptRows } = await supabase
+        .from("concepts")
+        .select("*")
+        .in("project_id", projectIds)
+        .order("created_at", { ascending: true });
+      concepts = (conceptRows ?? []).map((r: any) => ({
+        ...(r.concept_data as LandingPageConcept),
+        id: r.id,
+        projectId: r.project_id,
+        createdAt: r.created_at,
+      }));
+      conceptIds = concepts.map((c) => c.id);
+    }
+
+    // elements
+    const elementsMap: Record<string, LandingPageElements> = {};
+    const elementRowIdByConcept: Record<string, string> = {};
+    const imagesMap: Record<string, GeneratedImagePreview[]> = {};
+    if (conceptIds.length > 0) {
+      const { data: elemRows } = await supabase
+        .from("elements")
+        .select("*")
+        .in("concept_id", conceptIds)
+        .eq("section_id", "__doc__");
+      const elemIds: string[] = [];
+      (elemRows ?? []).forEach((r: any) => {
+        elementRowIdByConcept[r.concept_id] = r.id;
+        elemIds.push(r.id);
+        try {
+          if (r.body_copy) elementsMap[r.concept_id] = JSON.parse(r.body_copy);
+        } catch {
+          /* ignore */
+        }
+      });
+      // reverse map elem row id -> concept id
+      const elemToConcept: Record<string, string> = {};
+      Object.entries(elementRowIdByConcept).forEach(([cId, eId]) => {
+        elemToConcept[eId] = cId;
+      });
+      if (elemIds.length > 0) {
+        const { data: prevRows } = await supabase
+          .from("image_previews")
+          .select("*")
+          .in("element_id", elemIds)
+          .order("created_at", { ascending: true });
+        (prevRows ?? []).forEach((row: any) => {
+          const cId = elemToConcept[row.element_id];
+          if (!cId) return;
+          const meta = row.metadata ?? {};
+          const preview: GeneratedImagePreview = {
+            sectionId: meta.sectionId ?? row.id,
+            imagePrompt: meta.imagePrompt ?? "",
+            imageStyle: meta.imageStyle ?? "",
+            previewUrl: row.preview_url ?? meta.previewUrl ?? "",
+            status: (row.status as GeneratedImagePreview["status"]) ?? "simulated",
+            imageMode: meta.imageMode,
+            category: meta.category,
+            realUrl: meta.realUrl,
+            placeholderLabel: meta.placeholderLabel,
+          };
+          if (!imagesMap[cId]) imagesMap[cId] = [];
+          imagesMap[cId].push(preview);
+        });
+      }
+    }
+
+    // product visual profiles
+    const visualProfileMap: Record<string, ProductVisualProfile | null> = {};
+    const productImagesMap: Record<string, ProductImageRef[]> = {};
+    if (projectIds.length > 0) {
+      const { data: pvpRows } = await supabase
+        .from("product_visual_profiles")
+        .select("*")
+        .in("project_id", projectIds);
+      (pvpRows ?? []).forEach((r: any) => {
+        visualProfileMap[r.project_id] = (r.profile as ProductVisualProfile) ?? null;
+        if (Array.isArray(r.source_image_urls)) {
+          productImagesMap[r.project_id] = r.source_image_urls as ProductImageRef[];
+        }
+      });
+    }
+
+    setData({
+      user,
+      workspaces,
+      products,
+      projects,
+      concepts,
+      activeWorkspaceId: workspaces[0]?.id ?? null,
+      research: researchMap,
+      elements: elementsMap,
+      images: imagesMap,
+      productImages: productImagesMap,
+      visualProfile: visualProfileMap,
+      elementRowIdByConcept,
+      loaded: true,
+    });
+
+    // Check for legacy localStorage data
+    if (typeof window !== "undefined") {
+      const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy && workspaces.length === 0) {
+        try {
+          const parsed = JSON.parse(legacy);
+          if (parsed?.workspaces?.length > 0 || parsed?.projects?.length > 0) {
+            setLegacyImportPending(true);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }, []);
+
+  // Auth listener + initial load
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        const u: User = {
+          id: session.user.id,
+          email: session.user.email ?? "",
+          name:
+            (session.user.user_metadata as any)?.name ??
+            session.user.email?.split("@")[0] ??
+            "User",
+          createdAt: session.user.created_at ?? new Date().toISOString(),
+        };
+        // Only reload if new user id
+        if (dataRef.current.user?.id !== u.id || !dataRef.current.loaded) {
+          setData((d) => ({ ...d, user: u }));
+          void loadUserData(u);
+        }
+      } else if (event === "SIGNED_OUT") {
+        setData({ ...empty, loaded: true });
+      }
+    });
+    // Fetch existing session
+    supabase.auth.getSession().then(({ data: s }) => {
+      if (s.session?.user) {
+        const u: User = {
+          id: s.session.user.id,
+          email: s.session.user.email ?? "",
+          name:
+            (s.session.user.user_metadata as any)?.name ??
+            s.session.user.email?.split("@")[0] ??
+            "User",
+          createdAt: s.session.user.created_at ?? new Date().toISOString(),
+        };
+        setData((d) => ({ ...d, user: u }));
+        void loadUserData(u);
+      } else {
+        setData((d) => ({ ...d, loaded: true }));
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [loadUserData]);
+
+  const signUp = useCallback(async (email: string, password: string, name?: string) => {
+    const { data: res, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+        data: name ? { name } : undefined,
+      },
+    });
+    if (error) throw error;
+    if (!res.user) return null;
+    return {
+      id: res.user.id,
+      email: res.user.email ?? email,
+      name: name ?? email.split("@")[0],
+      createdAt: res.user.created_at ?? new Date().toISOString(),
+    };
+  }, []);
+
+  const signInWithPassword = useCallback(async (email: string, password: string) => {
+    const { data: res, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    if (!res.user) return null;
+    return {
+      id: res.user.id,
+      email: res.user.email ?? email,
+      name: (res.user.user_metadata as any)?.name ?? email.split("@")[0],
+      createdAt: res.user.created_at ?? new Date().toISOString(),
+    };
+  }, []);
+
+  const signIn = signInWithPassword;
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    setData({ ...empty, loaded: true });
   }, []);
 
   const createWorkspace = useCallback<StoreContextValue["createWorkspace"]>(
     (input) => {
+      const user = dataRef.current.user;
+      const id = uid();
       const ws: Workspace = {
         ...input,
-        id: uid(),
-        ownerId: "self",
+        id,
+        ownerId: user?.id ?? "self",
         createdAt: new Date().toISOString(),
       };
       setData((d) => ({
@@ -145,6 +420,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         workspaces: [...d.workspaces, ws],
         activeWorkspaceId: ws.id,
       }));
+      if (user) {
+        void supabase.from("brands").insert({
+          id: ws.id,
+          user_id: user.id,
+          name: ws.name,
+          description: ws.brandDescription,
+          primary_audience: ws.primaryAudience,
+          brand_voice: ws.brandVoice,
+        });
+      }
       return ws;
     },
     [],
@@ -154,31 +439,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setData((d) => ({ ...d, activeWorkspaceId: id }));
   }, []);
 
-  const createProduct = useCallback<StoreContextValue["createProduct"]>(
-    (input) => {
-      const p: Product = {
-        ...input,
-        id: uid(),
-        createdAt: new Date().toISOString(),
-      };
-      setData((d) => ({ ...d, products: [...d.products, p] }));
-      return p;
-    },
-    [],
-  );
+  const createProduct = useCallback<StoreContextValue["createProduct"]>((input) => {
+    const p: Product = {
+      ...input,
+      id: uid(),
+      createdAt: new Date().toISOString(),
+    };
+    setData((d) => ({ ...d, products: [...d.products, p] }));
+    return p;
+  }, []);
 
-  const createProject = useCallback<StoreContextValue["createProject"]>(
-    (input) => {
-      const p: Project = {
-        ...input,
-        id: uid(),
-        createdAt: new Date().toISOString(),
-      };
-      setData((d) => ({ ...d, projects: [...d.projects, p] }));
-      return p;
-    },
-    [],
-  );
+  const createProject = useCallback<StoreContextValue["createProject"]>((input) => {
+    const id = uid();
+    const p: Project = {
+      ...input,
+      id,
+      createdAt: new Date().toISOString(),
+    };
+    setData((d) => {
+      // find product; if productId matches an existing in-memory product, use it
+      const product =
+        d.products.find((pr) => pr.id === input.productId) ?? undefined;
+      // realign productId to project id (1:1 in db model)
+      const project: Project = { ...p, productId: id };
+      // update product to have its id changed to project.id in-memory
+      const products = product
+        ? d.products.map((pr) =>
+            pr.id === product.id ? { ...pr, id } : pr,
+          )
+        : d.products;
+      // Insert to DB
+      if (d.user) {
+        const row = projectToRow(project, product ? { ...product, id } : undefined);
+        void supabase.from("projects").insert(row);
+      }
+      return { ...d, projects: [...d.projects, project], products };
+    });
+    return p;
+  }, []);
 
   const saveConcepts = useCallback(
     (projectId: string, concepts: LandingPageConcept[]) => {
@@ -189,62 +487,84 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...concepts,
         ],
       }));
+      if (dataRef.current.user) {
+        // delete old + insert new
+        (async () => {
+          await supabase.from("concepts").delete().eq("project_id", projectId);
+          if (concepts.length > 0) {
+            const rows = concepts.map((c) => ({
+              id: c.id,
+              project_id: projectId,
+              framework_name: c.templateFamily,
+              concept_data: c as any,
+            }));
+            await supabase.from("concepts").insert(rows);
+          }
+        })().catch((e) => console.error("saveConcepts db", e));
+      }
     },
     [],
   );
 
   const updateConceptSection = useCallback<StoreContextValue["updateConceptSection"]>(
     (conceptId, sectionId, patch) => {
-      setData((d) => ({
-        ...d,
-        concepts: d.concepts.map((c) => {
+      let updatedConcept: LandingPageConcept | null = null;
+      setData((d) => {
+        const concepts = d.concepts.map((c) => {
           if (c.id !== conceptId) return c;
           const sections = c.schema.sections.map((s) =>
             s.id === sectionId ? { ...s, ...patch } : s,
           );
-          return { ...c, schema: { ...c.schema, sections } };
-        }),
-      }));
+          const next = { ...c, schema: { ...c.schema, sections } };
+          updatedConcept = next;
+          return next;
+        });
+        return { ...d, concepts };
+      });
+      if (dataRef.current.user && updatedConcept) {
+        void supabase
+          .from("concepts")
+          .update({ concept_data: updatedConcept as any })
+          .eq("id", conceptId);
+      }
     },
     [],
   );
 
   const deleteProject = useCallback((projectId: string) => {
-    setData((d) => {
-      const conceptIds = d.concepts.filter((c) => c.projectId === projectId).map((c) => c.id);
-      conceptIds.forEach((id) => storage.clearConcept(id));
-      storage.clearProject(projectId);
-      return {
-        ...d,
-        projects: d.projects.filter((p) => p.id !== projectId),
-        concepts: d.concepts.filter((c) => c.projectId !== projectId),
-      };
-    });
+    setData((d) => ({
+      ...d,
+      projects: d.projects.filter((p) => p.id !== projectId),
+      concepts: d.concepts.filter((c) => c.projectId !== projectId),
+      products: d.products.filter((pr) => pr.id !== projectId),
+    }));
+    if (dataRef.current.user) {
+      void supabase.from("projects").delete().eq("id", projectId);
+    }
   }, []);
 
   const deleteWorkspace = useCallback((workspaceId: string) => {
     setData((d) => {
       const projs = d.projects.filter((p) => p.workspaceId === workspaceId);
-      projs.forEach((p) => {
-        const conceptIds = d.concepts.filter((c) => c.projectId === p.id).map((c) => c.id);
-        conceptIds.forEach((id) => storage.clearConcept(id));
-        storage.clearProject(p.id);
-      });
+      const projIds = projs.map((p) => p.id);
       const remaining = d.workspaces.filter((w) => w.id !== workspaceId);
       return {
         ...d,
         workspaces: remaining,
-        products: d.products.filter((pr) => pr.workspaceId !== workspaceId),
-        projects: d.projects.filter((p) => p.workspaceId !== workspaceId),
-        concepts: d.concepts.filter(
-          (c) => !projs.some((p) => p.id === c.projectId),
+        products: d.products.filter(
+          (pr) => !projIds.includes(pr.id),
         ),
+        projects: d.projects.filter((p) => p.workspaceId !== workspaceId),
+        concepts: d.concepts.filter((c) => !projIds.includes(c.projectId)),
         activeWorkspaceId:
           d.activeWorkspaceId === workspaceId
             ? remaining[0]?.id ?? null
             : d.activeWorkspaceId,
       };
     });
+    if (dataRef.current.user) {
+      void supabase.from("brands").delete().eq("id", workspaceId);
+    }
   }, []);
 
   const activeWorkspace = useMemo(
@@ -252,13 +572,213 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [data.workspaces, data.activeWorkspaceId],
   );
 
-  const [version, setVersion] = useState(0);
-  const bump = useCallback(() => setVersion((v) => v + 1), []);
+  // Sub-resource operations
+  const saveResearch = useCallback((projectId: string, r: ProjectResearch) => {
+    setData((d) => ({ ...d, research: { ...d.research, [projectId]: r } }));
+    bump();
+    if (dataRef.current.user) {
+      void supabase.from("projects").update({ research: r as any }).eq("id", projectId);
+    }
+  }, [bump]);
+
+  const upsertElementsRow = async (conceptId: string, e: LandingPageElements) => {
+    const existingId = dataRef.current.elementRowIdByConcept[conceptId];
+    if (existingId) {
+      await supabase
+        .from("elements")
+        .update({ body_copy: JSON.stringify(e), is_edited: true })
+        .eq("id", existingId);
+      return existingId;
+    } else {
+      const newId = uid();
+      await supabase.from("elements").insert({
+        id: newId,
+        concept_id: conceptId,
+        section_id: "__doc__",
+        body_copy: JSON.stringify(e),
+      });
+      setData((d) => ({
+        ...d,
+        elementRowIdByConcept: { ...d.elementRowIdByConcept, [conceptId]: newId },
+      }));
+      return newId;
+    }
+  };
+
+  const saveElements = useCallback((conceptId: string, e: LandingPageElements) => {
+    setData((d) => ({ ...d, elements: { ...d.elements, [conceptId]: e } }));
+    bump();
+    if (dataRef.current.user) {
+      void upsertElementsRow(conceptId, e).catch((err) =>
+        console.error("saveElements db", err),
+      );
+    }
+  }, [bump]);
+
+  const saveImages = useCallback((conceptId: string, imgs: GeneratedImagePreview[]) => {
+    setData((d) => ({ ...d, images: { ...d.images, [conceptId]: imgs } }));
+    bump();
+    if (dataRef.current.user) {
+      (async () => {
+        // ensure elements row exists to attach to
+        let elemId = dataRef.current.elementRowIdByConcept[conceptId];
+        if (!elemId) {
+          const existing = dataRef.current.elements[conceptId];
+          if (existing) {
+            elemId = await upsertElementsRow(conceptId, existing);
+          } else {
+            elemId = uid();
+            await supabase.from("elements").insert({
+              id: elemId,
+              concept_id: conceptId,
+              section_id: "__doc__",
+              body_copy: null,
+            });
+            setData((d) => ({
+              ...d,
+              elementRowIdByConcept: { ...d.elementRowIdByConcept, [conceptId]: elemId! },
+            }));
+          }
+        }
+        await supabase.from("image_previews").delete().eq("element_id", elemId);
+        if (imgs.length > 0) {
+          const rows = imgs.map((im) => ({
+            element_id: elemId!,
+            preview_url: im.previewUrl,
+            status: im.status,
+            metadata: {
+              sectionId: im.sectionId,
+              imagePrompt: im.imagePrompt,
+              imageStyle: im.imageStyle,
+              imageMode: im.imageMode,
+              category: im.category,
+              realUrl: im.realUrl,
+              placeholderLabel: im.placeholderLabel,
+            },
+          }));
+          await supabase.from("image_previews").insert(rows);
+        }
+      })().catch((err) => console.error("saveImages db", err));
+    }
+  }, [bump]);
+
+  const saveProductImages = useCallback(
+    (projectId: string, imgs: ProductImageRef[]) => {
+      setData((d) => ({ ...d, productImages: { ...d.productImages, [projectId]: imgs } }));
+      bump();
+      if (dataRef.current.user) {
+        (async () => {
+          const { data: existing } = await supabase
+            .from("product_visual_profiles")
+            .select("id")
+            .eq("project_id", projectId)
+            .maybeSingle();
+          if (existing) {
+            await supabase
+              .from("product_visual_profiles")
+              .update({ source_image_urls: imgs as any })
+              .eq("id", existing.id);
+          } else {
+            await supabase.from("product_visual_profiles").insert({
+              project_id: projectId,
+              source_image_urls: imgs as any,
+            });
+          }
+        })().catch((err) => console.error("saveProductImages db", err));
+      }
+    },
+    [bump],
+  );
+
+  const saveVisualProfile = useCallback(
+    (projectId: string, p: ProductVisualProfile | null) => {
+      setData((d) => ({ ...d, visualProfile: { ...d.visualProfile, [projectId]: p } }));
+      bump();
+      if (dataRef.current.user) {
+        (async () => {
+          const { data: existing } = await supabase
+            .from("product_visual_profiles")
+            .select("id")
+            .eq("project_id", projectId)
+            .maybeSingle();
+          if (existing) {
+            await supabase
+              .from("product_visual_profiles")
+              .update({ profile: p as any, description: p?.productType ?? null })
+              .eq("id", existing.id);
+          } else {
+            await supabase.from("product_visual_profiles").insert({
+              project_id: projectId,
+              profile: p as any,
+              description: p?.productType ?? null,
+            });
+          }
+        })().catch((err) => console.error("saveVisualProfile db", err));
+      }
+    },
+    [bump],
+  );
+
+  const importLegacyData = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!raw) {
+      setLegacyImportPending(false);
+      return;
+    }
+    const user = dataRef.current.user;
+    if (!user) return;
+    try {
+      const parsed = JSON.parse(raw);
+      // Import workspaces
+      for (const ws of parsed.workspaces ?? []) {
+        await supabase.from("brands").insert({
+          id: ws.id,
+          user_id: user.id,
+          name: ws.name,
+          description: ws.brandDescription,
+          primary_audience: ws.primaryAudience,
+          brand_voice: ws.brandVoice ?? [],
+        });
+      }
+      for (const proj of parsed.projects ?? []) {
+        const product = (parsed.products ?? []).find(
+          (pr: Product) => pr.id === proj.productId,
+        );
+        const row = projectToRow({ ...proj }, product);
+        await supabase.from("projects").insert(row);
+      }
+      const conceptRows = (parsed.concepts ?? []).map((c: LandingPageConcept) => ({
+        id: c.id,
+        project_id: c.projectId,
+        framework_name: c.templateFamily,
+        concept_data: c as any,
+      }));
+      if (conceptRows.length > 0) {
+        await supabase.from("concepts").insert(conceptRows);
+      }
+      window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+      setLegacyImportPending(false);
+      await loadUserData(user);
+    } catch (err) {
+      console.error("importLegacyData", err);
+      throw err;
+    }
+  }, [loadUserData]);
+
+  const dismissLegacyImport = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+    }
+    setLegacyImportPending(false);
+  }, []);
 
   const value: StoreContextValue = {
     ...data,
     activeWorkspace,
     signIn,
+    signUp,
+    signInWithPassword,
     signOut,
     createWorkspace,
     setActiveWorkspace,
@@ -269,31 +789,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     deleteProject,
     deleteWorkspace,
     version,
-    getResearch: (id) => storage.loadResearch(id),
-    saveResearch: (id, r) => {
-      storage.saveResearch(id, r);
-      bump();
-    },
-    getElements: (id) => storage.loadElements(id),
-    saveElements: (id, e) => {
-      storage.saveElements(id, e);
-      bump();
-    },
-    getImages: (id) => storage.loadImages(id),
-    saveImages: (id, imgs) => {
-      storage.saveImages(id, imgs);
-      bump();
-    },
-    getProductImages: (id) => storage.loadProductImages(id),
-    saveProductImages: (id, imgs) => {
-      storage.saveProductImages(id, imgs);
-      bump();
-    },
-    getVisualProfile: (id) => storage.loadVisualProfile(id),
-    saveVisualProfile: (id, p) => {
-      storage.saveVisualProfile(id, p);
-      bump();
-    },
+    legacyImportPending,
+    importLegacyData,
+    dismissLegacyImport,
+    getResearch: (id) => data.research[id] ?? null,
+    saveResearch,
+    getElements: (id) => data.elements[id] ?? null,
+    saveElements,
+    getImages: (id) => data.images[id] ?? [],
+    saveImages,
+    getProductImages: (id) => data.productImages[id] ?? [],
+    saveProductImages,
+    getVisualProfile: (id) => data.visualProfile[id] ?? null,
+    saveVisualProfile,
   };
 
   return (
