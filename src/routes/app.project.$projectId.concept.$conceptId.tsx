@@ -334,34 +334,65 @@ function ConceptDetail() {
             <div>
               {concept.schema.sections.map((s) => {
                 const img = imageBySection[s.id];
+                const isPlaceholderImg = img && img.status === "placeholder" && !img.realUrl;
                 return (
                   <div key={s.id} id={`section-${s.id}`}>
-                    <SectionRenderer section={s} />
+                    <SectionRenderer
+                      section={s}
+                      onEdit={(field, value) =>
+                        updateConceptSection(concept.id, s.id, { [field]: value } as Partial<SectionProps>)
+                      }
+                    />
                     {img && (
                       <div className="px-10 pb-10 -mt-6">
                         <div className="rounded-lg overflow-hidden ring-soft">
-                          <div className="relative">
-                            <img
-                              src={img.realUrl ?? img.previewUrl}
-                              alt="Section preview"
-                              className={`w-full h-auto block ${realGenerating[s.id] ? "opacity-60" : ""}`}
-                              loading="lazy"
-                            />
-                            {realGenerating[s.id] && (
-                              <div className="absolute inset-0 grid place-items-center bg-background/40">
-                                <span className="mono-tag px-2 py-1 rounded bg-background/80 ring-soft">
-                                  Generating…
-                                </span>
+                          {isPlaceholderImg ? (
+                            <div className="aspect-[16/9] border-2 border-dashed border-border bg-surface-muted/60 grid place-items-center relative">
+                              {realGenerating[s.id] && (
+                                <div className="absolute inset-0 grid place-items-center bg-background/40 z-10">
+                                  <span className="mono-tag px-2 py-1 rounded bg-background/80 ring-soft">
+                                    Generating…
+                                  </span>
+                                </div>
+                              )}
+                              <div className="text-center px-6">
+                                <div className="mono-tag text-muted-foreground mb-2">
+                                  {img.imageMode ?? "image"}
+                                </div>
+                                <div className="text-sm font-medium mb-1">
+                                  {img.placeholderLabel ?? "Image placeholder"}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground max-w-md mx-auto leading-snug">
+                                  No stock image shown for this slot. Click "Generate real image" below to render with product grounding.
+                                </div>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <img
+                                src={img.realUrl ?? img.previewUrl}
+                                alt="Section preview"
+                                className={`w-full h-auto block ${realGenerating[s.id] ? "opacity-60" : ""}`}
+                                loading="lazy"
+                              />
+                              {realGenerating[s.id] && (
+                                <div className="absolute inset-0 grid place-items-center bg-background/40">
+                                  <span className="mono-tag px-2 py-1 rounded bg-background/80 ring-soft">
+                                    Generating…
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground gap-2">
                             <span className="mono-tag">
                               {img.status === "real"
                                 ? "Real image · AI-generated"
                                 : img.status === "failed"
                                   ? "Generation failed — using placeholder"
-                                  : "Preview image · Simulated"}
+                                  : img.status === "placeholder"
+                                    ? `Placeholder · ${img.imageMode ?? "image"}`
+                                    : "Preview image · Simulated"}
                             </span>
                             <div className="flex items-center gap-2">
                               {img.status !== "real" && (
