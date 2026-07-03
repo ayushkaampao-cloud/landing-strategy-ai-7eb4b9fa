@@ -124,7 +124,7 @@ function Sidebar() {
             {import.meta.env.VITE_SUPABASE_URL ?? "No Supabase URL"}
           </p>
         </div>
-    </aside>
+      </div>
   );
 }
 
