@@ -1,13 +1,15 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, generateConceptsForProject } from "@/lib/generator";
 import { SectionRenderer } from "@/components/SectionRenderer";
 import { GroundingBadge } from "@/components/GroundingBadge";
+import { VisualProfileSummary } from "@/components/VisualProfileSummary";
 import { generateRealImage } from "@/lib/puter";
+import { storage } from "@/lib/storage";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { GeneratedImagePreview, LandingPageElements } from "@/types";
+import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, SectionProps } from "@/types";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
   component: ConceptDetail,
@@ -21,6 +23,7 @@ function ConceptDetail() {
     workspaces,
     concepts,
     saveConcepts,
+    updateConceptSection,
     getResearch,
     getElements,
     saveElements,
@@ -29,7 +32,6 @@ function ConceptDetail() {
     getProductImages,
     getVisualProfile,
   } = useStore();
-  const navigate = useNavigate();
   const [copied, setCopied] = useState<string | null>(null);
   const [elementsLoading, setElementsLoading] = useState(false);
   const [elementsError, setElementsError] = useState<string | null>(null);
