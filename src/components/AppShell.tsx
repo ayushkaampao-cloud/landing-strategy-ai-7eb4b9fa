@@ -125,6 +125,7 @@ function Sidebar() {
           </p>
         </div>
       </div>
+    </aside>
   );
 }
 
