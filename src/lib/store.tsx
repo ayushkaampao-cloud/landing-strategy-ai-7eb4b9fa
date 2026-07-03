@@ -776,7 +776,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ...data,
     activeWorkspace,
     signUp,
-    signUp,
     signInWithPassword,
     signOut,
     createWorkspace,
