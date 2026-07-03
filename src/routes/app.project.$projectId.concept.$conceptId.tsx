@@ -1,13 +1,15 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, generateConceptsForProject } from "@/lib/generator";
 import { SectionRenderer } from "@/components/SectionRenderer";
 import { GroundingBadge } from "@/components/GroundingBadge";
+import { VisualProfileSummary } from "@/components/VisualProfileSummary";
 import { generateRealImage } from "@/lib/puter";
+import { storage } from "@/lib/storage";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { GeneratedImagePreview, LandingPageElements } from "@/types";
+import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, SectionProps } from "@/types";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
   component: ConceptDetail,
@@ -21,6 +23,7 @@ function ConceptDetail() {
     workspaces,
     concepts,
     saveConcepts,
+    updateConceptSection,
     getResearch,
     getElements,
     saveElements,
@@ -29,7 +32,6 @@ function ConceptDetail() {
     getProductImages,
     getVisualProfile,
   } = useStore();
-  const navigate = useNavigate();
   const [copied, setCopied] = useState<string | null>(null);
   const [elementsLoading, setElementsLoading] = useState(false);
   const [elementsError, setElementsError] = useState<string | null>(null);
@@ -103,74 +105,64 @@ function ConceptDetail() {
 
   const [regenerating, setRegenerating] = useState(false);
   const regenerate = async () => {
-    if (!workspace || !product || !project) return;
+    if (!workspace || !product || !project || !concept) return;
     setRegenerating(true);
     try {
-      const research =
-        getResearch(projectId) ?? null;
-      if (!research) {
-        // No research cached — bounce through the full generating flow.
-        navigate({
-          to: "/app/project/$projectId/generating",
-          params: { projectId },
-          replace: true,
+      const research = getResearch(projectId) ?? null;
+      let merged: LandingPageConcept;
+      if (research) {
+        const res = await fetch("/api/generate-strategies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: project.id,
+            workspace: {
+              name: workspace.name,
+              brandDescription: workspace.brandDescription,
+              brandVoice: workspace.brandVoice,
+              primaryAudience: workspace.primaryAudience,
+            },
+            product: {
+              name: product.name,
+              shortDescription: product.shortDescription,
+              keyFeatures: product.keyFeatures,
+              keyBenefits: product.keyBenefits,
+              priceInfo: product.priceInfo,
+            },
+            project: {
+              goal: project.goal,
+              tone: project.tone,
+              desiredAngle: project.desiredAngle,
+            },
+            research,
+            onlyFamily: concept.templateFamily,
+          }),
         });
-        return;
+        if (!res.ok) throw new Error(await res.text());
+        const data = (await res.json()) as { concepts: LandingPageConcept[] };
+        const fresh = data.concepts[0];
+        if (!fresh) throw new Error("No concept returned");
+        merged = { ...fresh, id: concept.id, projectId: project.id, createdAt: concept.createdAt };
+      } else {
+        // Skeleton fallback — never navigate away.
+        const skeleton = generateConceptsForProject(workspace, product, project);
+        const swap = skeleton.find((c) => c.templateFamily === concept.templateFamily);
+        if (!swap) throw new Error("Skeleton returned no matching family");
+        merged = { ...swap, id: concept.id, projectId: project.id, createdAt: concept.createdAt };
       }
-      const res = await fetch("/api/generate-strategies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: project.id,
-          workspace: {
-            name: workspace.name,
-            brandDescription: workspace.brandDescription,
-            brandVoice: workspace.brandVoice,
-            primaryAudience: workspace.primaryAudience,
-          },
-          product: {
-            name: product.name,
-            shortDescription: product.shortDescription,
-            keyFeatures: product.keyFeatures,
-            keyBenefits: product.keyBenefits,
-            priceInfo: product.priceInfo,
-          },
-          project: {
-            goal: project.goal,
-            tone: project.tone,
-            desiredAngle: project.desiredAngle,
-          },
-          research,
-          onlyFamily: concept.templateFamily,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as { concepts: import("@/types").LandingPageConcept[] };
-      const fresh = data.concepts[0];
-      if (!fresh) throw new Error("No concept returned");
-      // Replace only the current framework's concept, keep the others.
-      const others = concepts.filter(
-        (c) => c.projectId !== project.id || c.templateFamily !== concept.templateFamily,
-      );
-      saveConcepts(project.id, [...others.filter((c) => c.projectId === project.id), fresh]);
-      navigate({
-        to: "/app/project/$projectId/concept/$conceptId",
-        params: { projectId, conceptId: fresh.id },
-        replace: true,
-      });
+      // Replace the current concept in place, keep siblings intact, keep route.
+      const nextForProject = concepts
+        .filter((c) => c.projectId === project.id)
+        .map((c) => (c.id === concept.id ? merged : c));
+      saveConcepts(project.id, nextForProject);
+      // Invalidate cached derived artefacts for this concept.
+      storage.clearConcept(concept.id);
+      setElementsVersion((v) => v + 1);
+      setImagesVersion((v) => v + 1);
+      toast.success("Concept regenerated");
     } catch (err) {
       console.error("[regenerate] error:", err);
-      // Last-resort fallback so the app never dead-ends.
-      const fresh = generateConceptsForProject(workspace, product, project);
-      saveConcepts(project.id, fresh);
-      const swap = fresh.find((c) => c.templateFamily === concept.templateFamily);
-      if (swap) {
-        navigate({
-          to: "/app/project/$projectId/concept/$conceptId",
-          params: { projectId, conceptId: swap.id },
-          replace: true,
-        });
-      }
+      toast.error(`Regeneration failed: ${(err as Error).message}`);
     } finally {
       setRegenerating(false);
     }
@@ -342,34 +334,65 @@ function ConceptDetail() {
             <div>
               {concept.schema.sections.map((s) => {
                 const img = imageBySection[s.id];
+                const isPlaceholderImg = img && img.status === "placeholder" && !img.realUrl;
                 return (
                   <div key={s.id} id={`section-${s.id}`}>
-                    <SectionRenderer section={s} />
+                    <SectionRenderer
+                      section={s}
+                      onEdit={(field, value) =>
+                        updateConceptSection(concept.id, s.id, { [field]: value } as Partial<SectionProps>)
+                      }
+                    />
                     {img && (
                       <div className="px-10 pb-10 -mt-6">
                         <div className="rounded-lg overflow-hidden ring-soft">
-                          <div className="relative">
-                            <img
-                              src={img.realUrl ?? img.previewUrl}
-                              alt="Section preview"
-                              className={`w-full h-auto block ${realGenerating[s.id] ? "opacity-60" : ""}`}
-                              loading="lazy"
-                            />
-                            {realGenerating[s.id] && (
-                              <div className="absolute inset-0 grid place-items-center bg-background/40">
-                                <span className="mono-tag px-2 py-1 rounded bg-background/80 ring-soft">
-                                  Generating…
-                                </span>
+                          {isPlaceholderImg ? (
+                            <div className="aspect-[16/9] border-2 border-dashed border-border bg-surface-muted/60 grid place-items-center relative">
+                              {realGenerating[s.id] && (
+                                <div className="absolute inset-0 grid place-items-center bg-background/40 z-10">
+                                  <span className="mono-tag px-2 py-1 rounded bg-background/80 ring-soft">
+                                    Generating…
+                                  </span>
+                                </div>
+                              )}
+                              <div className="text-center px-6">
+                                <div className="mono-tag text-muted-foreground mb-2">
+                                  {img.imageMode ?? "image"}
+                                </div>
+                                <div className="text-sm font-medium mb-1">
+                                  {img.placeholderLabel ?? "Image placeholder"}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground max-w-md mx-auto leading-snug">
+                                  No stock image shown for this slot. Click "Generate real image" below to render with product grounding.
+                                </div>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <img
+                                src={img.realUrl ?? img.previewUrl}
+                                alt="Section preview"
+                                className={`w-full h-auto block ${realGenerating[s.id] ? "opacity-60" : ""}`}
+                                loading="lazy"
+                              />
+                              {realGenerating[s.id] && (
+                                <div className="absolute inset-0 grid place-items-center bg-background/40">
+                                  <span className="mono-tag px-2 py-1 rounded bg-background/80 ring-soft">
+                                    Generating…
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground gap-2">
                             <span className="mono-tag">
                               {img.status === "real"
                                 ? "Real image · AI-generated"
                                 : img.status === "failed"
                                   ? "Generation failed — using placeholder"
-                                  : "Preview image · Simulated"}
+                                  : img.status === "placeholder"
+                                    ? `Placeholder · ${img.imageMode ?? "image"}`
+                                    : "Preview image · Simulated"}
                             </span>
                             <div className="flex items-center gap-2">
                               {img.status !== "real" && (
@@ -454,6 +477,16 @@ function ConceptDetail() {
                 </div>
               </div>
             )}
+
+            <div className="mb-6">
+              <VisualProfileSummary
+                profile={visualProfile}
+                imageCount={productImages.length}
+                compact
+              />
+            </div>
+
+
 
 
             <div className="mb-6">

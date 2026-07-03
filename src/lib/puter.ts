@@ -45,7 +45,7 @@ function modelFor(mode?: ImageMode): string | undefined {
 }
 
 const DEFAULT_NEGATIVE =
-  "mountains, oceans, unrelated scenery, random fruit, random objects, incorrect product shape, text overlays, watermarks";
+  "landscapes, mountains, oceans, forests, sunsets, beaches, travel scenes, random people, animals, wildlife, unrelated fruit, unrelated objects, generic stock photo, altered product shape, altered label placement, text overlays, watermarks, logo overlays";
 
 export interface GenerateRealImageInput {
   prompt: string;
@@ -56,7 +56,13 @@ export interface GenerateRealImageInput {
 }
 
 function buildFullPrompt(input: GenerateRealImageInput): string {
-  const parts: string[] = [input.prompt.trim()];
+  const parts: string[] = [];
+  if ((input.referenceImages?.length ?? 0) > 0) {
+    parts.push(
+      `Match the uploaded product reference exactly: preserve silhouette, proportions, label placement, and color.`,
+    );
+  }
+  parts.push(input.prompt.trim());
   if (input.visualProfile) {
     const p = input.visualProfile;
     const grounding = [
@@ -65,6 +71,7 @@ function buildFullPrompt(input: GenerateRealImageInput): string {
       p.visibleColors?.length && `Colors: ${p.visibleColors.join(", ")}`,
       p.labelStyle && `Label style: ${p.labelStyle}`,
       p.shapeDescription && `Shape: ${p.shapeDescription}`,
+      p.mustAvoid?.length && `Avoid also: ${p.mustAvoid.join(", ")}`,
     ]
       .filter(Boolean)
       .join(". ");

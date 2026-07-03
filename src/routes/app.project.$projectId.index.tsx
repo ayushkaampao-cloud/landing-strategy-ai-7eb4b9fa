@@ -2,6 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, TEMPLATE_FAMILIES } from "@/lib/generator";
+import { VisualProfileSummary } from "@/components/VisualProfileSummary";
+import { GroundingBadge } from "@/components/GroundingBadge";
 
 export const Route = createFileRoute("/app/project/$projectId/")({
   component: ProjectGallery,
@@ -9,11 +11,13 @@ export const Route = createFileRoute("/app/project/$projectId/")({
 
 function ProjectGallery() {
   const { projectId } = Route.useParams();
-  const { projects, products, concepts, getResearch } = useStore();
+  const { projects, products, concepts, getResearch, getProductImages, getVisualProfile } = useStore();
   const project = projects.find((p) => p.id === projectId);
   const product = products.find((p) => p.id === project?.productId);
   const projectConcepts = concepts.filter((c) => c.projectId === projectId);
   const research = getResearch(projectId);
+  const productImages = getProductImages(projectId);
+  const visualProfile = getVisualProfile(projectId);
 
   if (!project) {
     return (
@@ -89,6 +93,7 @@ function ProjectGallery() {
   return (
     <>
       <TopBar>
+        <GroundingBadge count={productImages.length} hasProfile={!!visualProfile} />
         <span className="mono-tag text-muted-foreground">{project.goal}</span>
       </TopBar>
       <div className="p-8 max-w-7xl">
@@ -122,6 +127,12 @@ function ProjectGallery() {
             )}
           </div>
         )}
+
+        <div className="mb-8">
+          <VisualProfileSummary profile={visualProfile} imageCount={productImages.length} />
+        </div>
+
+
 
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
