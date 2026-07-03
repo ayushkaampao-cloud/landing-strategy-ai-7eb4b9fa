@@ -1,123 +1,147 @@
-# Landing Page AI 1.0 — Final Consolidated Upgrade
+# Fix Plan: Landing Page AI — Broken Core Behavior
 
-Five-part upgrade layered on top of the existing pipeline. The classify → research → strategies → elements → images chain, the Gemini/Lovable/OpenRouter fallback, localStorage persistence, and the five framework families stay intact.
-
----
-
-## Part 1 — Product Image Upload & Visual Grounding
-
-**New type** (`src/types.ts`)
-- `ProductImageRef { id, dataUrl, width, height, addedAt, order }`
-- `ProductVisualProfile { productType, visibleMaterials[], visibleColors[], packagingStyle, labelStyle, shapeDescription, keyVisibleParts[], visibleAccessories[], likelyUsageContext, premiumLevel, photoConsistencyNotes, mustPreserve[], mustAvoid[] }`
-- Extend `Project` with optional `productImages?: ProductImageRef[]` and `visualProfile?: ProductVisualProfile | null` (null = analyzed but skipped; undefined = never attempted).
-
-**Storage** (`src/lib/storage.ts` + `store.tsx`)
-- New keys `lpai:productImages:${projectId}` and `lpai:visualProfile:${projectId}`.
-- Client-side downscale to max 1024px longest edge, JPEG q=0.82, stored as base64 data URLs. Warn if total >4 MB.
-- Store helpers: `getProductImages / saveProductImages / getVisualProfile / saveVisualProfile`.
-
-**Upload UI**
-- New component `src/components/ProductImageUploader.tsx`: drag-drop + file picker, thumbnails with remove + drag-reorder, cap at 10, category-aware copy.
-- Wired into `src/routes/app.product.new.tsx` as a step after brand details, before "Generate concepts". For SaaS/finance/service categories, the step is present but explicitly skippable ("No physical product — skip").
-
-**Analysis route** (`src/routes/api/analyze-product-images.ts`)
-- POST `{ projectId, category, images: [{dataUrl}] }`.
-- For physical categories only. Calls existing gateway with multimodal input (image_url blocks with data URLs) using default Gemini model, `responseSchema` matching `ProductVisualProfile`.
-- Returns the profile; client persists via store. If no images or non-physical category: returns `{ profile: null, mode: "text_only_visual_inference" }`.
-
-**Prompt integration**
-- Extend `research.ts`, `generate-strategies.ts`, `generate-elements.ts`, and image-prompt generation to accept optional `visualProfile`. When present, injected as a `PRODUCT VISUAL GROUNDING` block with the hard rule: "Use the uploaded product-image analysis as the primary visual grounding source. Do not invent a different product shape, packaging, material, label design, or accessories than what was analyzed. Preserve every item in mustPreserve; avoid every item in mustAvoid."
-- Image prompts additionally weave `mustPreserve[]` into subject/material/label fields.
-
-**Confidence badge**
-- New `<GroundingBadge>` shown on concept, elements, and image panels: "Grounded in N uploaded product images" (accent) or "Text-only visual inference" (muted).
+Scope: fix the 4 concrete bugs without redesigning anything. All work is in the frontend + existing API routes.
 
 ---
 
-## Part 2 — Real Image Generation via Puter.js
+## Part 1 — Make "Needs your input" placeholders editable inline
 
-**Loader**
-- Add `<script src="https://js.puter.com/v2/"></script>` via `head.scripts` in `src/routes/__root.tsx`. Client-only; no key required.
-- Small wrapper `src/lib/puter.ts` with `ensurePuter()` (waits for `window.puter`) and `generateImage({ prompt, negativePrompt, model, referenceImages? })`.
+**New:** `src/components/Editable.tsx`
+- Click-to-edit text primitive.
+- Renders as styled placeholder (amber, dotted underline) when value looks like a placeholder (`/^(add|needs|placeholder|verify|tbd|todo|insert |real customer|verified )/i`, or `isPlaceholder` prop).
+- On click → swaps to `<input>` or `<textarea>` (per `multiline`), autofocuses & selects.
+- Saves on blur / Enter; Esc cancels; empty value → reverts to placeholder.
+- Shows small "User provided" tag when the current value differs from placeholder.
 
-**Per-section control** (`src/components/SectionRenderer.tsx` + concept detail page)
-- Keep existing Picsum preview as immediate placeholder.
-- Add two buttons per image slot: "Generate real image" and "Keep placeholder". No auto-generation.
-- While generating: loading shimmer over the placeholder. On success: swap preview to Puter blob URL and update `GeneratedImagePreview.status = "real"` in localStorage. On failure/timeout (20s): keep Picsum, show muted label "Image generation failed — using placeholder."
+**New store method:** `src/lib/store.tsx`
+- `updateConceptSection(conceptId, sectionId, patch: Partial<SectionProps>)` → mutates the concept in the `concepts` array immutably and persists via existing localStorage.
+- If `patch` yields all-empty strings, delete those keys so placeholder default returns (rendered from generator's placeholder string).
 
-**Model routing by imageMode** (in `src/lib/puter.ts`)
-- `product_packshot | product_in_use | material_detail | ingredient_macro` → photoreal model (try `black-forest-labs/flux.2-pro`, fall back to `openai/gpt-image-2`).
-- `interface_ui | dashboard_closeup | comparison_graphic | data_visual_support` → UI-friendly model (`openai/gpt-image-2` clean vector-oriented prompt).
-- `abstract_brand_texture | iconographic_brand_visual | quote_card_visual` → any general model default.
+**Edit** `src/components/SectionRenderer.tsx`
+- Add optional prop `onEdit?: (field: keyof SectionProps, value: string) => void`.
+- When `onEdit` is provided AND `section.placeholder || section.proofNeeded`, wrap these fields with `<Editable>`:
+  - hero: `title` (h1), `subtitle`, `ctaLabel`, `ctaSecondaryLabel`, `highlight`
+  - problem-solution / story / lifestyle / details / cta: `title`, `body`
+  - social-proof: `body` (testimonial), `highlight` (attribution)
+  - guarantee: `title`, `body`
+  - offer / cta: `title`, `subtitle`, `ctaLabel`
+  - comparison / feature-grid / faq: skip item-level editing this pass (still render).
+- Keep the existing `PlaceholderBadge` for the section-level cue.
+- Backward-compatible when `onEdit` is absent.
 
-**Prompt assembly**
-- Base = existing `imagePrompt` + " Avoid: " + `negativePrompt` (falling back to a default negative list including "mountains, oceans, unrelated scenery, random fruit, random objects, incorrect product shape, text overlays, watermarks").
-- If `visualProfile` exists: append "Product visual grounding — must preserve: {mustPreserve}. Materials: {visibleMaterials}. Colors: {visibleColors}. Label style: {labelStyle}. Shape: {shapeDescription}."
-- If uploaded product images exist AND the selected Puter model supports image-to-image input, pass the first 1–3 references via Puter's image-input option (detected at call time). Otherwise text-only. Wrapped in try/catch so an unsupported model silently falls back to text-only.
+**Edit** `src/routes/app.project.$projectId.concept.$conceptId.tsx`
+- Pass `onEdit={(field, value) => updateConceptSection(conceptId, s.id, { [field]: value })}` to each `<SectionRenderer>`.
+- Persistence works automatically because store already serializes `concepts` to localStorage.
 
----
-
-## Part 3 — Navigation (Back Button + Breadcrumbs)
-
-**Back control**
-- New `<BackLink>` component using TanStack `<Link>` with `to=".."` `from={Route.fullPath}` so it maps to real route history (browser back-compatible, preload="intent").
-- Add to `app.project.$projectId.concept.$conceptId.tsx`, `app.project.$projectId.generating.tsx`, and any elements/image sub-pages, labelled contextually ("← Back to concepts", "← Back to project").
-
-**Breadcrumbs**
-- New `<Breadcrumbs>` at top of deep pages: `Project Name / Concept Name / Elements`, each segment a `<Link>`. Uses store lookups for names.
-
-**History hygiene**
-- Audit uses of `useNavigate` — replace click-nav with `<Link>` where a plain href works. Ensure no `replace: true` on normal transitions.
-- Enable `scrollRestoration: true` in `src/router.tsx`.
+Placeholders covered per user list: headlines, CTA labels, testimonial bodies, proof/metric highlights (hero.highlight, social-proof.highlight), guarantee body, comparison titles/bodies via section-level fields. No auto-fill; user-only.
 
 ---
 
-## Part 4 — Delete Project / Delete Brand
+## Part 2 — Fix "Regenerate whole concept" (blank Concept-not-found)
 
-**Store additions** (`src/lib/store.tsx`)
-- `deleteProject(projectId)`: removes project + its concepts, and clears `lpai:research:*`, `lpai:elements:*` (per concept), `lpai:images:*` (per concept), `lpai:productImages:*`, `lpai:visualProfile:*`.
-- `deleteWorkspace(workspaceId)`: cascades — deletes all products and projects under the workspace (each via `deleteProject`), then removes the workspace itself; if it was active, reset `activeWorkspaceId`.
+Root cause: `saveConcepts` runs `setData` asynchronously; the `navigate` to a **new conceptId** re-renders before state commits → lookup returns undefined → "Concept not found."
 
-**UI**
-- Project card kebab menu (`DropdownMenu`) on `app.projects.tsx` and project index with a "Delete project" item → `AlertDialog` confirming with the project name.
-- Brand/workspace delete entry in `app.brand.new.tsx` / workspace switcher area with equivalent `AlertDialog`.
-- On confirm: run cascade, `toast.success("Project deleted")`, `navigate({ to: "/app" })`.
+Chosen approach: **Option A — regenerate in place, keep same `concept.id`**.
 
----
+**Edit** `src/routes/app.project.$projectId.concept.$conceptId.tsx` → `regenerate()`:
+1. Loading + error state via existing `regenerating` + a new `regenError` (shown as toast + inline banner; user stays on the same route).
+2. Call `/api/generate-strategies` with `onlyFamily: concept.templateFamily`.
+3. Take `fresh` and **reuse the current `concept.id`**:
+   ```ts
+   const merged: LandingPageConcept = { ...fresh, id: concept.id, projectId: project.id, createdAt: concept.createdAt };
+   const nextForProject = concepts
+     .filter(c => c.projectId === project.id)
+     .map(c => (c.id === concept.id ? merged : c));
+   saveConcepts(project.id, nextForProject);
+   ```
+4. **No navigation.** Route stays valid; existing sections re-render.
+5. Also invalidate cached elements/images for this concept via `storage.clearConcept(concept.id)` + bump versions so the elements/images panel resets cleanly.
+6. On error: `toast.error(...)`, keep the user on the current concept. Never navigate.
+7. Fallback path (network failure) also uses in-place replacement with the local `generateConceptsForProject` output for the same family.
 
-## Part 5 — Premium / Futuristic UI
-
-**Tokens** (`src/styles.css`)
-- Introduce a dark-first neutral palette (deep slate surfaces, alpha-blended borders `color-mix(in oklab, foreground 8%, transparent)`), one confident accent (a restrained electric teal — no purple/blue gradient cliché), semantic tokens for `--surface-1..3`, `--border-soft`, `--shadow-soft/elevated`, `--radius-sm/md/lg`.
-- Add `@theme` entries for the new colors so Tailwind utilities pick them up.
-- Full light-mode counterpart with matched contrast (WCAG AA verified on primary/foreground/background pairs).
-
-**Typography**
-- Load Satoshi (display) + General Sans (body) from Fontshare via `<link>` in `__root.tsx` head. Update `--font-display` and `--font-sans` in `@theme`. Apply `font-display` to h1/h2/hero, body font elsewhere.
-
-**Component polish**
-- Update `Button`, `Card`, `Input`, `DropdownMenu`, `Dialog`, and `AppShell` for the new tokens: soft layered surfaces, alpha borders, subtle inner highlight on hover, focus rings using the accent at 40% alpha.
-- Micro-interactions: 120–180ms ease-out on hover/press. `motion-safe:` only, respecting `prefers-reduced-motion`.
-- Page transitions: lightweight fade+translate on route content wrapper in `AppShell`, using CSS transitions keyed on `pathname`. Skip when reduced-motion.
-
-**Dark mode toggle**
-- Add `ThemeProvider` (class-based `dark`) with toggle in `AppShell` header, persisted in localStorage. Default = system, then dark.
-
-**Consistency pass**
-- Apply tokens across dashboard, new project flow, project detail, concept detail, elements panel, image panel, account/settings. Ensure 44px min touch targets and consistent spacing scale.
+Result: regeneration is idempotent — same route, same URL, same conceptId every time. Cannot dead-end.
 
 ---
 
-## Self-test checklist (run before reporting done)
-1. Upload 2 images to a `beauty_skincare` project → `visualProfile.mustPreserve` populated; strategies/elements prompts contain the grounding block; badge reads "Grounded in 2 uploaded product images".
-2. SaaS project with no upload → badge reads "Text-only visual inference"; pipeline still runs.
-3. Click "Generate real image" on a `product_packshot` section of the skincare project → Puter returns image resembling the uploaded bottle; on a SaaS `interface_ui` section → clean UI-style render.
-4. Back links + browser back/forward traverse project → concept → elements without dead-ends; scroll roughly restored.
-5. Delete project → confirmation → cascade removes all `lpai:*:<id>` keys, toast shown, redirect to /app. Delete brand → all child projects gone, no orphans in localStorage.
-6. Dark + light modes both polished across dashboard, concept detail, elements panel; AA contrast passes.
+## Part 3 — Connect product image uploads to actual output
 
-## Out of scope
-- Supabase or any server-side persistence
-- Changes to the classification / no-fabrication / imageMode logic
-- Changes to the Gemini/Lovable/OpenRouter fallback chain
-- New framework families or new pipeline steps beyond the analyze-product-images call
+**Edit** `src/routes/api/analyze-product-images.ts`
+- Accept `dataUrl`s and pass them multimodally when the gateway supports it. Gateway text-only today; keep current text-only best-effort profile, **but** stamp `photoConsistencyNotes` with `"Uploaded ${N} product image(s). Treat these as ground truth for shape, color, label layout."` so downstream text prompts always reference the upload.
+- Return `mode: "grounded"` whenever `images.length > 0` (fallback profile still counts).
+
+**Confirm downstream wiring** (audit only, small edits if needed):
+- `generate-strategies`, `generate-elements` already receive `research.classification`. Add `visualProfile` to their request bodies from the concept detail page and thread it through to the prompt (append a "Visual grounding" block from `mustPreserve`, `visibleColors`, `keyVisibleParts`). If routes don't yet read it, extend them minimally.
+- `generate-images` already gets `category`; add `visualProfile` + `referenceImageCount` to the request body.
+- Puter `generateRealImage` already merges `visualProfile.mustPreserve/Colors/Materials/labelStyle/shape` into the prompt (verified in `src/lib/puter.ts`).
+
+**UI visibility (debug-safe):**
+- **New:** `src/components/VisualProfileSummary.tsx` — compact card showing productType, colors, materials, shape, packaging, label, keyVisibleParts, mustPreserve, mustAvoid, plus header "N image(s) analyzed" or "Text-only visual inference".
+- Render on:
+  - Project dashboard (`app.project.$projectId.index.tsx`) — right below the Research snapshot.
+  - Concept detail (`app.project.$projectId.concept.$conceptId.tsx`) — in the right rail, above "Elements & visuals".
+- Existing `<GroundingBadge>` in the TopBar stays.
+
+---
+
+## Part 4 — Fix image generation relevance
+
+**Edit** `src/types.ts`
+- Extend `GeneratedImagePreview.status` union with `"placeholder"`.
+- Add optional `placeholderLabel?: string` and `placeholderMode?: ImageMode`.
+
+**Edit** `src/routes/api/generate-images.ts`
+- Define `PHYSICAL_CATEGORIES = ["dtc_physical_product","beauty_skincare","hardware_device","food_beverage"]`.
+- For each item:
+  - If `category` is physical **OR** the resolved `mode` is one of `product_packshot | product_in_use | material_detail | ingredient_macro` → return `{ status: "placeholder", previewUrl: "", placeholderLabel: LABEL_BY_MODE[mode], placeholderMode: mode }` (no Picsum).
+  - Otherwise (SaaS, service, abstract modes) → keep existing `previewUrlFor(mode, seed)` (still grayscale-treated abstract textures, never scenery for physical products).
+- `LABEL_BY_MODE`:
+  - `product_packshot` → "Product packshot placeholder"
+  - `product_in_use` → "Product in use placeholder"
+  - `material_detail` → "Material detail placeholder"
+  - `ingredient_macro` → "Ingredient macro placeholder"
+  - fallbacks per remaining modes.
+
+**Edit** `src/components/SectionRenderer.tsx` image slot (via concept page) — actually rendering lives in the concept page. So:
+
+**Edit** `src/routes/app.project.$projectId.concept.$conceptId.tsx` image renderer block:
+- When `img.status === "placeholder"` and no `img.realUrl`: render a structured neutral card (aspect 16/9, dashed border, muted background) with:
+  - big mode icon (simple SVG glyph per mode)
+  - `img.placeholderLabel`
+  - small "Generate real image" button (existing action) — routes through Puter with the visualProfile.
+  - a secondary "Not yet generated — click to render with product grounding" caption.
+- When `img.realUrl` present: unchanged.
+
+**Edit** `src/lib/puter.ts`
+- Extend `DEFAULT_NEGATIVE` to include: `"landscapes, mountains, oceans, forests, sunsets, beaches, random people, animals, wildlife, travel scenes, unrelated fruit, unrelated objects, generic stock photo, wrong product shape, altered label, text overlays, watermarks"`.
+- If `referenceImages.length > 0`, prepend to prompt: `"Match uploaded product reference exactly: preserve silhouette, proportions, label placement, and color."` (Puter.js API doesn't accept image inputs today — documented limitation below.)
+
+Net: physical-product sections never show scenery. Wrong-but-pretty images replaced with explicit, mode-labeled placeholder cards until the user opts into real Puter generation.
+
+---
+
+## Part 5 — Back button / route stability
+
+**Audit + tiny edits:**
+- Concept detail TopBar already has "← All 5 concepts". Keep.
+- Project detail: add "← Projects" back link (already via TopBar breadcrumbs — verify).
+- `generating` and `product/new`: ensure TopBar back link renders.
+- Since regenerate no longer navigates, browser back/forward can no longer land on a stale conceptId.
+- All action buttons that mutate state (`updateConceptSection`, `saveElements`, `saveImages`) stay on-route.
+
+---
+
+## Part 6 — Self-test checklist (manual after build)
+
+1. Upload 3+ product images at `/app/product/new` → project created, `analyze-product-images` returns profile → project page shows `<VisualProfileSummary>` with real colors/materials.
+2. Open a concept → placeholder headline is amber + dotted underline → click → input opens → type "Sleep-tracking that actually sleeps with you" → blur → new value renders + "User provided" tag → reload page → value persists.
+3. Click "Regenerate this concept" 3× → URL unchanged → sections update in place → no "Concept not found."
+4. If network fails, toast error appears, page stays intact.
+5. Generate elements → Generate images. For a physical-product project, all image slots show structured `"Product packshot placeholder"` / `"Product in use placeholder"` cards — no random scenery, no animals, no landscapes.
+6. Click "Generate real image" on a slot → Puter prompt includes `Preserve: … Materials: … Colors: … Avoid: landscapes, animals, …`.
+7. Verify `<GroundingBadge>` in TopBar reads "Grounded in N uploaded images".
+
+---
+
+## Known limitation to report back
+
+- Puter.js `txt2img` currently accepts a text prompt only. True **reference-image conditioning** (img2img with uploaded product photos as visual anchors) is not exposed by the Puter SDK we're using. We compensate by injecting the analyzed `ProductVisualProfile` (colors, materials, shape, mustPreserve/mustAvoid) into every prompt, and by falling back to explicit structured placeholders whenever real generation isn't invoked — so users never see a plausibly-wrong image passing itself off as the product.
