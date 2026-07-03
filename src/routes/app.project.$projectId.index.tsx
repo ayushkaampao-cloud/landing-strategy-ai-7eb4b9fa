@@ -128,6 +128,12 @@ function ProjectGallery() {
           </div>
         )}
 
+        <div className="mb-8">
+          <VisualProfileSummary profile={visualProfile} imageCount={productImages.length} />
+        </div>
+
+
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {ordered.map((c) => {
