@@ -110,8 +110,8 @@ function Sidebar() {
             <p className="mono-tag text-muted-foreground truncate">{user?.email}</p>
           </div>
           <button
-            onClick={() => {
-              signOut();
+            onClick={async () => {
+              await signOut();
               navigate({ to: "/" });
             }}
             className="mono-tag text-muted-foreground hover:text-foreground"
