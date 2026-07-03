@@ -110,8 +110,8 @@ function Sidebar() {
             <p className="mono-tag text-muted-foreground truncate">{user?.email}</p>
           </div>
           <button
-            onClick={() => {
-              signOut();
+            onClick={async () => {
+              await signOut();
               navigate({ to: "/" });
             }}
             className="mono-tag text-muted-foreground hover:text-foreground"
@@ -140,20 +140,17 @@ export function TopBar({ children }: { children?: ReactNode }) {
 }
 
 export function AppShell() {
-  const { user } = useStore();
+  const { user, loaded, legacyImportPending, importLegacyData, dismissLegacyImport } = useStore();
   const navigate = useNavigate();
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
-    if (user === null) {
-      // delay to allow hydration
-      const t = setTimeout(() => {
-        if (!user) navigate({ to: "/auth" });
-      }, 50);
-      return () => clearTimeout(t);
+    if (loaded && !user) {
+      navigate({ to: "/auth" });
     }
-  }, [user, navigate]);
+  }, [user, loaded, navigate]);
 
-  if (!user) {
+  if (!loaded || !user) {
     return (
       <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">
         Loading…
@@ -167,6 +164,41 @@ export function AppShell() {
       <main className="flex-1 min-w-0 flex flex-col">
         <Outlet />
       </main>
+      {legacyImportPending && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm grid place-items-center p-4">
+          <div className="max-w-md w-full bg-surface border border-border rounded-lg p-6 shadow-lg">
+            <h2 className="text-lg font-semibold tracking-tight">Import your previous data?</h2>
+            <p className="text-sm text-muted-foreground mt-2">
+              We found brands, projects and concepts stored locally in this browser
+              from before you signed in. Import them into your account so they're
+              available everywhere.
+            </p>
+            <div className="flex gap-2 justify-end mt-6">
+              <button
+                onClick={dismissLegacyImport}
+                disabled={importing}
+                className="mono-tag px-3 py-2 rounded-md text-muted-foreground hover:text-foreground"
+              >
+                Discard
+              </button>
+              <button
+                onClick={async () => {
+                  setImporting(true);
+                  try {
+                    await importLegacyData();
+                  } finally {
+                    setImporting(false);
+                  }
+                }}
+                disabled={importing}
+                className="px-4 py-2 rounded-md bg-ink text-background text-sm font-medium hover:opacity-90 disabled:opacity-50"
+              >
+                {importing ? "Importing…" : "Import to my account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
