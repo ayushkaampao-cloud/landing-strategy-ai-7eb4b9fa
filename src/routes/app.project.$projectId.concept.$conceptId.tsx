@@ -117,10 +117,28 @@ function ConceptDetail() {
     }
   };
 
-  const [regenerating, setRegenerating] = useState(false);
   const regenerate = async () => {
     if (!workspace || !product || !project || !concept) return;
+    // Double-guard: ref catches double-clicks within the same tick before
+    // the setState above commits.
+    if (regeneratingRef.current) return;
+    regeneratingRef.current = true;
     setRegenerating(true);
+    const previousConcept = concept;
+    const editedPaths = Object.keys(getEditedFields(concept.id));
+    const editedCount = editedPaths.length;
+    if (editedCount > 0) {
+      const ok = window.confirm(
+        `You have ${editedCount} edited field${editedCount === 1 ? "" : "s"} on this concept. ` +
+          `Overwrite them with a fresh generation?\n\n` +
+          `OK to overwrite everything, Cancel to keep the current concept.`,
+      );
+      if (!ok) {
+        regeneratingRef.current = false;
+        setRegenerating(false);
+        return;
+      }
+    }
     try {
       const research = getResearch(projectId) ?? null;
       let merged: LandingPageConcept;
@@ -156,6 +174,8 @@ function ConceptDetail() {
         const data = (await res.json()) as { concepts: LandingPageConcept[] };
         const fresh = data.concepts[0];
         if (!fresh) throw new Error("No concept returned");
+        // Preserve stable id/createdAt so URL stays valid and elements/images
+        // rows don't cascade-delete.
         merged = { ...fresh, id: concept.id, projectId: project.id, createdAt: concept.createdAt };
       } else {
         // Skeleton fallback — never navigate away.
@@ -164,20 +184,27 @@ function ConceptDetail() {
         if (!swap) throw new Error("Skeleton returned no matching family");
         merged = { ...swap, id: concept.id, projectId: project.id, createdAt: concept.createdAt };
       }
-      // Replace the current concept in place, keep siblings intact, keep route.
       const nextForProject = concepts
         .filter((c) => c.projectId === project.id)
         .map((c) => (c.id === concept.id ? merged : c));
-      saveConcepts(project.id, nextForProject);
-      // Invalidate cached derived artefacts for this concept.
+      // Await the DB write BEFORE mutating any local caches. If the write
+      // fails we throw and land in the catch below, leaving the previous
+      // concept untouched on screen.
+      await saveConceptsAsync(project.id, nextForProject);
+      // Only now is it safe to invalidate derived artefacts.
       storage.clearConcept(concept.id);
       setElementsVersion((v) => v + 1);
       setImagesVersion((v) => v + 1);
       toast.success("Concept regenerated");
     } catch (err) {
       console.error("[regenerate] error:", err);
-      toast.error(`Regeneration failed: ${(err as Error).message}`);
+      toast.error(
+        `Regeneration failed: ${(err as Error).message}. Your current concept is unchanged.`,
+      );
+      // Ensure the previous concept is still visible; no navigation happens.
+      void previousConcept;
     } finally {
+      regeneratingRef.current = false;
       setRegenerating(false);
     }
   };
