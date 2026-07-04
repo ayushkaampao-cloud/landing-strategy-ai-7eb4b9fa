@@ -35,6 +35,7 @@ interface AppData {
   elements: Record<string, LandingPageElements>;
   images: Record<string, GeneratedImagePreview[]>;
   productImages: Record<string, ProductImageRef[]>;
+  productImageCount: Record<string, number>;
   visualProfile: Record<string, ProductVisualProfile | null>;
   elementRowIdByConcept: Record<string, string>; // concept.id -> elements table row id
   loaded: boolean;
@@ -51,6 +52,7 @@ const empty: AppData = {
   elements: {},
   images: {},
   productImages: {},
+  productImageCount: {},
   visualProfile: {},
   elementRowIdByConcept: {},
   loaded: false,
@@ -83,6 +85,7 @@ interface StoreContextValue extends AppData {
   saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => void;
   getProductImages: (projectId: string) => ProductImageRef[];
   saveProductImages: (projectId: string, imgs: ProductImageRef[]) => void;
+  getProductImageCount: (projectId: string) => number;
   getVisualProfile: (projectId: string) => ProductVisualProfile | null;
   saveVisualProfile: (projectId: string, p: ProductVisualProfile | null) => void;
   version: number;
@@ -278,18 +281,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // product visual profiles
     const visualProfileMap: Record<string, ProductVisualProfile | null> = {};
     const productImagesMap: Record<string, ProductImageRef[]> = {};
+    const productImageCountMap: Record<string, number> = {};
     if (projectIds.length > 0) {
       // NOTE: Do NOT select source_image_urls here — it holds base64 dataUrls
       // used only by the server-side image generation route, and pulling them
       // into the client on every refresh causes multi-MB payloads / timeouts
       // that can silently blank the app shell. The server reads them via the
-      // admin client when generating images.
+      // admin client when generating images. We only pull the lightweight
+      // image_count generated column so the UI can show the grounding count.
       const { data: pvpRows } = await supabase
         .from("product_visual_profiles")
-        .select("id, project_id, profile, description")
+        .select("id, project_id, profile, description, image_count")
         .in("project_id", projectIds);
       (pvpRows ?? []).forEach((r: any) => {
         visualProfileMap[r.project_id] = (r.profile as ProductVisualProfile) ?? null;
+        productImageCountMap[r.project_id] = (r.image_count as number) ?? 0;
       });
     }
 
@@ -304,6 +310,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       elements: elementsMap,
       images: imagesMap,
       productImages: productImagesMap,
+      productImageCount: productImageCountMap,
       visualProfile: visualProfileMap,
       elementRowIdByConcept,
       loaded: true,
@@ -672,7 +679,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveProductImages = useCallback(
     (projectId: string, imgs: ProductImageRef[]) => {
-      setData((d) => ({ ...d, productImages: { ...d.productImages, [projectId]: imgs } }));
+      setData((d) => ({
+        ...d,
+        productImages: { ...d.productImages, [projectId]: imgs },
+        productImageCount: { ...d.productImageCount, [projectId]: imgs.length },
+      }));
       bump();
       if (dataRef.current.user) {
         (async () => {
@@ -807,6 +818,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     saveImages,
     getProductImages: (id) => data.productImages[id] ?? [],
     saveProductImages,
+    getProductImageCount: (id) => data.productImageCount[id] ?? 0,
     getVisualProfile: (id) => data.visualProfile[id] ?? null,
     saveVisualProfile,
   };

@@ -9,7 +9,7 @@ import { generateRealImage } from "@/lib/puter";
 import { storage } from "@/lib/storage";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, SectionProps } from "@/types";
+import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, ProductImageRef, SectionProps } from "@/types";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
   component: ConceptDetail,
@@ -29,7 +29,7 @@ function ConceptDetail() {
     saveElements,
     getImages,
     saveImages,
-    getProductImages,
+    getProductImageCount,
     getVisualProfile,
   } = useStore();
   const [copied, setCopied] = useState<string | null>(null);
@@ -195,8 +195,23 @@ function ConceptDetail() {
     return map;
   }, [images]);
 
-  const productImages = getProductImages(projectId);
+  const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
+  // generateRealImage only checks referenceImages.length > 0 to inject grounding
+  // text, so a single placeholder is enough after refresh when the count > 0.
+  const referenceImagesForReal: ProductImageRef[] =
+    productImageCount > 0
+      ? [
+          {
+            id: "ref",
+            dataUrl: "",
+            width: 0,
+            height: 0,
+            addedAt: new Date().toISOString(),
+            order: 0,
+          },
+        ]
+      : [];
 
   async function handleGenerateRealImage(sectionId: string) {
     const img = imageBySection[sectionId];
@@ -208,7 +223,7 @@ function ConceptDetail() {
         negativePrompt: concept?.schema.sections.find((s) => s.id === sectionId)?.negativePrompt,
         imageMode: img.imageMode,
         visualProfile,
-        referenceImages: productImages,
+        referenceImages: referenceImagesForReal,
       });
       const next = images.map((i) =>
         i.sectionId === sectionId ? { ...i, realUrl: url, status: "real" as const } : i,
@@ -324,7 +339,7 @@ function ConceptDetail() {
   return (
     <>
       <TopBar>
-        <GroundingBadge count={productImages.length} hasProfile={!!visualProfile} />
+        <GroundingBadge count={productImageCount} hasProfile={!!visualProfile} />
         <Link
           to="/app/project/$projectId"
           params={{ projectId }}
@@ -532,7 +547,7 @@ function ConceptDetail() {
             <div className="mb-6">
               <VisualProfileSummary
                 profile={visualProfile}
-                imageCount={productImages.length}
+                imageCount={productImageCount}
                 compact
               />
             </div>

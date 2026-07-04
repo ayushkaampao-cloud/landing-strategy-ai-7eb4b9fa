@@ -11,12 +11,12 @@ export const Route = createFileRoute("/app/project/$projectId/")({
 
 function ProjectGallery() {
   const { projectId } = Route.useParams();
-  const { projects, products, concepts, getResearch, getProductImages, getVisualProfile } = useStore();
+  const { projects, products, concepts, getResearch, getProductImageCount, getVisualProfile } = useStore();
   const project = projects.find((p) => p.id === projectId);
   const product = products.find((p) => p.id === project?.productId);
   const projectConcepts = concepts.filter((c) => c.projectId === projectId);
   const research = getResearch(projectId);
-  const productImages = getProductImages(projectId);
+  const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
 
   if (!project) {
@@ -93,7 +93,7 @@ function ProjectGallery() {
   return (
     <>
       <TopBar>
-        <GroundingBadge count={productImages.length} hasProfile={!!visualProfile} />
+        <GroundingBadge count={productImageCount} hasProfile={!!visualProfile} />
         <span className="mono-tag text-muted-foreground">{project.goal}</span>
       </TopBar>
       <div className="p-8 max-w-7xl">
@@ -129,7 +129,7 @@ function ProjectGallery() {
         )}
 
         <div className="mb-8">
-          <VisualProfileSummary profile={visualProfile} imageCount={productImages.length} />
+          <VisualProfileSummary profile={visualProfile} imageCount={productImageCount} />
         </div>
 
 

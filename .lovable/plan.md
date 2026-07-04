@@ -1,48 +1,55 @@
-## What's happening
+Plan: Switch to Nano Banana 2 and source the grounding badge from a lightweight count
 
-The last change swapped image generation to Gemini via the Lovable AI Gateway and made `/api/generate-images` do a server-side read of `product_visual_profiles.source_image_urls`. Two side effects of that turn are the most plausible causes of the "blank screen + lost brand/project on refresh":
+1. Answers to the two questions
 
-### 1. Concept page can throw during render, tripping the root `errorComponent`
+   - Yes, the Lovable AI Gateway supports the newer Google image model. The exact model identifier to use is `google/gemini-3.1-flash-image` (Nano Banana 2). It is listed in the image generation catalog and is a direct replacement for the current `google/gemini-2.5-flash-image` in `src/routes/api/generate-images.ts`.
 
-`src/routes/app.project.$projectId.concept.$conceptId.tsx` now reads `img.previewUrl` unconditionally:
+   - The existing request body in that route already uses the correct Gemini image-model shape: a `messages` array with `content` blocks and `modalities: ["image", "text"]`. So the only required change for the model swap is the model id string.
 
-```
-src={ (img.realUrl ?? img.previewUrl) +
-      (imgRetry[s.id] ? (img.previewUrl.includes("?") ? "&" : "?") + `_r=…` : "") }
-```
+   - Yes, the grounding count can be sourced from a lightweight query. `product_visual_profiles.source_image_urls` is a JSONB array of uploaded photo metadata. The client can read a tiny generated column such as `image_count` instead of the full base64 payloads, so the badge count survives refresh without re-introducing the multi-megabyte payload that was removed.
 
-For rows produced by the new pipeline, `previewUrl` can be an empty string (failed generation → status `"failed"`, no URL). That path is fine. But the `saveImages` DB round-trip stores `preview_url` as-is, so on refresh `row.preview_url` can be `""` or `null` and `imgFailed[s.id]` starts `false` — the `<img>` renders with `src=""`, which many browsers request as the page URL itself and fires `onerror`; the retry button then re-runs the `.includes` branch. This is not blank-screen-worthy on its own, but combined with #2 it produces the observed cascade.
+2. Files to change
 
-More importantly, the same file now depends on `productImages`/`visualProfile` being loaded before render (`GroundingBadge`, VisualProfileSummary, `handleGenerateRealImage`). If the initial store load for `product_visual_profiles` throws (see #2), the concept page mounts with `useStore()` throwing / undefined and React unmounts into `ErrorComponent`, which shows the generic "This page didn't load" screen — the user perceives this as "everything is gone".
+   a. Database migration
+      - Add a generated column to `public.product_visual_profiles`:
+        ```sql
+        ALTER TABLE public.product_visual_profiles
+          ADD COLUMN image_count INT
+          GENERATED ALWAYS AS (jsonb_array_length(COALESCE(source_image_urls, '[]'::jsonb)))
+          STORED;
+        ```
+      - No new RLS policies or GRANTs are needed because the existing policies on the table already cover the column.
 
-### 2. `product_visual_profiles.source_image_urls` is now pulled on every page load and can be huge
+   b. `src/lib/store.tsx`
+      - Add `productImageCount: Record<string, number>` to the `AppData` shape.
+      - In `loadUserData`, extend the `product_visual_profiles` select to include `image_count`:
+        ```ts
+        .select("id, project_id, profile, description, image_count")
+        ```
+      - Build a `productImageCount` map from the returned rows.
+      - Expose `getProductImageCount: (projectId: string) => number` in the store context value.
+      - Keep `productImages` for current-session uploads (the dataUrls are already in the client), but no longer rely on it after refresh.
 
-`loadUserData` in `src/lib/store.tsx` does `supabase.from("product_visual_profiles").select("*")` for every project. That column is `jsonb` and now holds full `dataUrl` base64 payloads for up to N uploaded product photos (used by the new Gemini reference-image path in `/api/generate-images`). On refresh:
+   c. `src/routes/app.project.$projectId.concept.$conceptId.tsx`
+      - Read `productImageCount = getProductImageCount(projectId)` and pass it to `GroundingBadge`:
+        ```tsx
+        <GroundingBadge count={productImageCount} hasProfile={!!visualProfile} />
+        ```
+      - For the client-side `generateRealImage` call, keep a lightweight reference signal (the function only checks whether `referenceImages.length > 0`). A single placeholder `ProductImageRef` when `productImageCount > 0` is enough to trigger the grounding prompt text.
 
-- The response can be multi-megabyte per project; PostgREST/Supabase can time out or return an error.
-- The parsed JSON is held in React state as `productImages` — memory spike + slow hydrate.
-- If the query errors, `loadUserData` currently swallows via optional chaining and sets `productImages: {}`, but if a *later* step (e.g. `.in("project_id", projectIds)` with a very long response) fails, `setData(...)` is never reached and `loaded` stays false → the AppShell shows "Loading…" forever, indistinguishable from "blank".
+   d. `src/routes/api/generate-images.ts`
+      - Change the model constant:
+        ```ts
+        const GEMINI_IMAGE_MODEL = "google/gemini-3.1-flash-image";
+        ```
+      - Leave the rest of the body (messages, modalities, content blocks) unchanged because it is already the correct Gemini image-model shape.
 
-Nothing in the store or `AppShell` changed to cause this — the new dependency on base64 references in the DB is what made an already-fat column load-blocking.
+3. Verification steps
 
-### 3. Did the change touch brand/project/concept data loading?
+   - Generate a concept image for one section and confirm the route still returns a valid image and a signed URL.
+   - Refresh the concept page and confirm the grounding badge shows the correct number of uploaded reference images.
+   - Confirm the browser no longer downloads multi-megabyte `source_image_urls` payloads on refresh.
 
-Not directly — `src/lib/store.tsx` `loadUserData` wasn't edited in the image-gen turn. The indirect coupling is through `product_visual_profiles`, which is queried in the same initial load and now carries the heavy reference-image payload used by the new Gemini flow.
+4. Rollback
 
-## Minimal fix (image-related code only)
-
-Do not touch `loadUserData`, brand/project fetching, or concept persistence. Fix only what the image-generation change introduced.
-
-1. **Stop loading base64 reference images into the client.** In `loadUserData` in `src/lib/store.tsx`, change the `product_visual_profiles` select to explicit columns and drop `source_image_urls` from the client fetch (server-side `/api/generate-images` still reads it via `supabaseAdmin` — that path is unchanged). Keep `productImages` in state derived from a lighter `ProductImageRef` shape (id + optional thumbnail URL), or leave it empty on load and only rehydrate on demand.
-
-2. **Guard the concept page against empty preview URLs.** In `src/routes/app.project.$projectId.concept.$conceptId.tsx`, treat `!img.previewUrl && !img.realUrl && img.status !== "placeholder"` as the "failed" branch (retry UI), instead of trying to render `<img src="">`. This prevents the render-time exception that trips `ErrorComponent`.
-
-3. **Never write empty strings to `image_previews.preview_url`.** In `/api/generate-images`, when `status === "failed"`, return `previewUrl: null` (and adjust the type). The client's `saveImages` should then persist `null`, and the load path already tolerates it.
-
-That's it — three surgical edits. No changes to brand/project/concept loading, saving, auth, or the store's persistence logic; no changes to the copy-generation pipeline.
-
-## Technical details
-
-- Files to touch: `src/lib/store.tsx` (single select statement in `loadUserData`), `src/routes/app.project.$projectId.concept.$conceptId.tsx` (image render branch), `src/routes/api/generate-images.ts` (`failed` return shape). Type touch-up in `src/types.ts` if `previewUrl` is not already `string | null`.
-- Verification: after edits, refresh the concept page cold — brand/project/concept must appear from the DB, and a section whose image failed must show the "Retry" state instead of blanking the route.
-- Out of scope: hydration `data-tsd-source` warning in the console (dev-only, unrelated), the AI copy generation pipeline, storage RLS policies added earlier.
+   - If the new model fails, revert `GEMINI_IMAGE_MODEL` back to `"google/gemini-2.5-flash-image"`. The grounding count changes are independent and can remain.
