@@ -38,6 +38,8 @@ interface AppData {
   productImageCount: Record<string, number>;
   visualProfile: Record<string, ProductVisualProfile | null>;
   elementRowIdByConcept: Record<string, string>; // concept.id -> elements table row id
+  elementEditedFields: Record<string, Record<string, boolean>>; // conceptId -> field path -> true
+  elementSaveErrors: Record<string, Record<string, string>>; // conceptId -> field path -> error msg
   loaded: boolean;
 }
 
@@ -55,6 +57,8 @@ const empty: AppData = {
   productImageCount: {},
   visualProfile: {},
   elementRowIdByConcept: {},
+  elementEditedFields: {},
+  elementSaveErrors: {},
   loaded: false,
 };
 
