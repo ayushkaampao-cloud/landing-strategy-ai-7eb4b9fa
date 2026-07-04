@@ -71,7 +71,13 @@ export interface ProductVisualProfile {
   photoConsistencyNotes: string;
   mustPreserve: string[];
   mustAvoid: string[];
+  /** Human-readable combined description of the uploaded product photos. Used
+   *  as a grounding prefix on downstream image prompts. */
+  summaryText?: string;
+  /** How many uploaded photos contributed to summaryText. */
+  sourcePhotoCount?: number;
 }
+
 
 export interface BrandBrief {
   positioning: string;

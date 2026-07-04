@@ -4,6 +4,7 @@ import {
   buildVisualBrief,
   categoryGuidance,
   factsBlock,
+  groundingPrefix,
   NO_FABRICATION_RULE,
   pickImageModeForSection,
   UNIVERSAL_NEGATIVE_PROMPT,
@@ -15,6 +16,7 @@ import type {
   LandingPageElementsSection,
   ProjectClassification,
   ProjectResearch,
+  ProductVisualProfile,
 } from "@/types";
 
 interface Body {
@@ -24,7 +26,11 @@ interface Body {
   /** Optional — passed through from the client so elements are category-aware. */
   research?: ProjectResearch;
   classification?: ProjectClassification;
+  /** Optional — the analyzed product-photo profile for this project. When
+   *  present, its summaryText is prepended to every image prompt. */
+  visualProfile?: ProductVisualProfile | null;
 }
+
 
 const ELEMENTS_SCHEMA = {
   type: "object",
@@ -144,6 +150,8 @@ export const Route = createFileRoute("/api/generate-elements")({
             body.research,
           );
 
+          const grounding = groundingPrefix(body.visualProfile?.summaryText);
+
           const sections: LandingPageElementsSection[] = (raw.sections ?? []).map((s, i) => {
             const match =
               sectionsInput.find((x) => x.type === (s.sectionType as string) || x.title === s.sectionRef) ??
@@ -155,6 +163,7 @@ export const Route = createFileRoute("/api/generate-elements")({
               imageMode,
               visualBrief.brandName,
               body.product.name,
+              grounding,
             );
             return {
               sectionId: match?.id ?? `s${i}`,
@@ -180,7 +189,9 @@ export const Route = createFileRoute("/api/generate-elements")({
             heroMode,
             visualBrief.brandName,
             body.product.name,
+            grounding,
           );
+
 
           const elements: LandingPageElements = {
             conceptId: body.concept.id,
@@ -211,14 +222,16 @@ function enrichPrompts(
   mode: ImageMode,
   brandName: string,
   productName: string,
+  grounding: string = "",
 ): string[] {
   if (mode === "no_image_needed") return [];
   const modePrefix = MODE_PREFIX[mode] ?? "";
   return prompts.map((p) => {
     const base = (p || "").trim();
-    return `[${mode}] ${modePrefix} ${base} — brand: ${brandName}, product: ${productName}. NEGATIVE: ${UNIVERSAL_NEGATIVE_PROMPT}`;
+    return `[${mode}] ${grounding}${modePrefix} ${base} — brand: ${brandName}, product: ${productName}. NEGATIVE: ${UNIVERSAL_NEGATIVE_PROMPT}`;
   });
 }
+
 
 const MODE_PREFIX: Record<ImageMode, string> = {
   interface_ui: "Stylized product UI panel, cropped, ghosted layers,",

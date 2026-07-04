@@ -2,8 +2,10 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 import type { ProductImageRef, ProjectGoal, ProjectSourceMode } from "@/types";
 import { ProductImageUploader } from "@/components/ProductImageUploader";
+
 
 export const Route = createFileRoute("/app/product/new")({
   component: NewProduct,
@@ -90,21 +92,36 @@ function NewProduct() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            projectId: project.id,
             images: productImages.map((i) => ({ dataUrl: i.dataUrl })),
           }),
         });
         if (res.ok) {
-          const data = (await res.json()) as { profile: import("@/types").ProductVisualProfile | null };
+          const data = (await res.json()) as {
+            profile: import("@/types").ProductVisualProfile | null;
+            mode?: string;
+          };
           saveVisualProfile(project.id, data.profile);
+          if (data.profile?.summaryText) {
+            toast.success("Product photos analyzed ✓");
+          } else {
+            toast.message(
+              "Product photos saved — visual analysis unavailable right now, continuing without grounding.",
+            );
+          }
+        } else {
+          toast.message("Product photos saved — visual analysis failed, continuing without grounding.");
         }
       } catch (err) {
         console.warn("[product-image analysis] failed:", err);
+        toast.message("Product photos saved — visual analysis failed, continuing without grounding.");
       } finally {
         setAnalyzing(false);
       }
     } else {
       saveVisualProfile(project.id, null);
     }
+
 
     navigate({
       to: "/app/project/$projectId/generating",

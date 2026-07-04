@@ -41,6 +41,11 @@ function ConceptDetail() {
   const [elementsVersion, setElementsVersion] = useState(0);
   const [imagesVersion, setImagesVersion] = useState(0);
   const [realGenerating, setRealGenerating] = useState<Record<string, boolean>>({});
+  // Section IDs whose preview image failed to load, plus a per-section
+  // retry nonce that lets the user reload without regenerating the URL.
+  const [imgFailed, setImgFailed] = useState<Record<string, boolean>>({});
+  const [imgRetry, setImgRetry] = useState<Record<string, number>>({});
+
 
 
   const project = projects.find((p) => p.id === projectId);
@@ -247,11 +252,13 @@ function ConceptDetail() {
           },
           research: research ?? undefined,
           classification: research?.classification,
+          visualProfile: visualProfile ?? undefined,
         }),
       });
       clearInterval(stepTimer);
       if (!res.ok) throw new Error((await res.text()) || "Element generation failed");
       const data = (await res.json()) as LandingPageElements;
+
       saveElements(conceptId, data);
       setElementsVersion((v) => v + 1);
       setElementsStep(4);
@@ -267,11 +274,16 @@ function ConceptDetail() {
     setImagesLoading(true);
     setImagesError(null);
     try {
+      const negBySection: Record<string, string | undefined> = {};
+      concept!.schema.sections.forEach((s) => {
+        negBySection[s.id] = s.negativePrompt;
+      });
       const items = [
         ...elements.hero.imagePrompts.map((p, i) => ({
           sectionId: `hero-${i}`,
           imagePrompt: p,
           imageStyle: elements.globalStyle.imageStyle,
+          negativePrompt: undefined as string | undefined,
         })),
         ...elements.sections.flatMap((sec) =>
           (sec.imagePrompts ?? []).map((p) => ({
@@ -279,6 +291,7 @@ function ConceptDetail() {
             imagePrompt: p,
             imageStyle: elements.globalStyle.imageStyle,
             imageMode: sec.imageMode,
+            negativePrompt: sec.negativePrompt ?? negBySection[sec.sectionId],
           })),
         ),
       ];
@@ -295,7 +308,10 @@ function ConceptDetail() {
       if (!res.ok) throw new Error("Image generation failed");
       const data = (await res.json()) as { previews: GeneratedImagePreview[] };
       saveImages(conceptId, data.previews);
+      setImgFailed({});
+      setImgRetry({});
       setImagesVersion((v) => v + 1);
+
     } catch (err) {
       setImagesError((err as Error).message);
     } finally {
@@ -367,13 +383,41 @@ function ConceptDetail() {
                                 </div>
                               </div>
                             </div>
+                          ) : imgFailed[s.id] ? (
+                            <div className="aspect-[16/9] bg-neutral-200 dark:bg-neutral-800 grid place-items-center">
+                              <div className="text-center px-6">
+                                <div className="text-sm font-medium mb-1 text-muted-foreground">
+                                  Image didn't load
+                                </div>
+                                <div className="text-[11px] text-muted-foreground mb-3 max-w-xs mx-auto">
+                                  The preview host may be busy. Try again in a moment.
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setImgFailed((m) => ({ ...m, [s.id]: false }));
+                                    setImgRetry((m) => ({ ...m, [s.id]: (m[s.id] ?? 0) + 1 }));
+                                  }}
+                                  className="mono-tag px-3 py-1 rounded bg-ink text-background hover:opacity-90"
+                                >
+                                  Retry
+                                </button>
+                              </div>
+                            </div>
                           ) : (
                             <div className="relative">
                               <img
-                                src={img.realUrl ?? img.previewUrl}
+                                key={`${img.realUrl ?? img.previewUrl}#${imgRetry[s.id] ?? 0}`}
+                                src={
+                                  (img.realUrl ?? img.previewUrl) +
+                                  (imgRetry[s.id]
+                                    ? (img.previewUrl.includes("?") ? "&" : "?") + `_r=${imgRetry[s.id]}`
+                                    : "")
+                                }
                                 alt="Section preview"
                                 className={`w-full h-auto block ${realGenerating[s.id] ? "opacity-60" : ""}`}
                                 loading="lazy"
+                                onError={() => setImgFailed((m) => ({ ...m, [s.id]: true }))}
                               />
                               {realGenerating[s.id] && (
                                 <div className="absolute inset-0 grid place-items-center bg-background/40">
@@ -384,6 +428,7 @@ function ConceptDetail() {
                               )}
                             </div>
                           )}
+
                           <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground gap-2">
                             <span className="mono-tag">
                               {img.status === "real"
@@ -392,7 +437,7 @@ function ConceptDetail() {
                                   ? "Generation failed — using placeholder"
                                   : img.status === "placeholder"
                                     ? `Placeholder · ${img.imageMode ?? "image"}`
-                                    : "Preview image · Simulated"}
+                                    : "Preview image · Generated"}
                             </span>
                             <div className="flex items-center gap-2">
                               {img.status !== "real" && (
