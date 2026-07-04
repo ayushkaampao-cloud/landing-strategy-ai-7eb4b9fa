@@ -508,6 +508,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return p;
   }, []);
 
+  const persistConceptsToDb = useCallback(
+    async (projectId: string, concepts: LandingPageConcept[]) => {
+      const keepIds = concepts.map((c) => c.id);
+      if (concepts.length > 0) {
+        const rows = concepts.map((c) => ({
+          id: c.id,
+          project_id: projectId,
+          framework_name: c.templateFamily,
+          concept_data: c as any,
+        }));
+        const { error: upErr } = await supabase
+          .from("concepts")
+          .upsert(rows, { onConflict: "id" });
+        if (upErr) throw upErr;
+      }
+      let del = supabase.from("concepts").delete().eq("project_id", projectId);
+      if (keepIds.length > 0) {
+        del = del.not(
+          "id",
+          "in",
+          `(${keepIds.map((id) => `"${id}"`).join(",")})`,
+        );
+      }
+      const { error: delErr } = await del;
+      if (delErr) throw delErr;
+    },
+    [],
+  );
+
   const saveConcepts = useCallback(
     (projectId: string, concepts: LandingPageConcept[]) => {
       setData((d) => ({
@@ -518,29 +547,93 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ],
       }));
       if (dataRef.current.user) {
-        // Upsert to preserve existing concept row ids so ON DELETE CASCADE
-        // does NOT wipe elements/image_previews for unchanged siblings.
-        (async () => {
-          const keepIds = concepts.map((c) => c.id);
-          if (concepts.length > 0) {
-            const rows = concepts.map((c) => ({
-              id: c.id,
-              project_id: projectId,
-              framework_name: c.templateFamily,
-              concept_data: c as any,
-            }));
-            await supabase.from("concepts").upsert(rows, { onConflict: "id" });
-          }
-          // Delete only concepts that were actually removed from the project.
-          let del = supabase.from("concepts").delete().eq("project_id", projectId);
-          if (keepIds.length > 0) {
-            del = del.not("id", "in", `(${keepIds.map((id) => `"${id}"`).join(",")})`);
-          }
-          await del;
-        })().catch((e) => console.error("saveConcepts db", e));
+        persistConceptsToDb(projectId, concepts).catch((e) =>
+          console.error("saveConcepts db", e),
+        );
       }
     },
+    [persistConceptsToDb],
+  );
+
+  const saveConceptsAsync = useCallback(
+    async (projectId: string, concepts: LandingPageConcept[]) => {
+      if (dataRef.current.user) {
+        await persistConceptsToDb(projectId, concepts);
+      }
+      setData((d) => ({
+        ...d,
+        concepts: [
+          ...d.concepts.filter((c) => c.projectId !== projectId),
+          ...concepts,
+        ],
+      }));
+    },
+    [persistConceptsToDb],
+  );
+
+  const ensureElementsRowId = useCallback(
+    async (conceptId: string): Promise<string> => {
+      const existing = dataRef.current.elementRowIdByConcept[conceptId];
+      if (existing) return existing;
+      const newId = uid();
+      const { error } = await supabase.from("elements").insert({
+        id: newId,
+        concept_id: conceptId,
+        section_id: "__doc__",
+        body_copy: null,
+      });
+      if (error) throw error;
+      setData((d) => ({
+        ...d,
+        elementRowIdByConcept: {
+          ...d.elementRowIdByConcept,
+          [conceptId]: newId,
+        },
+      }));
+      return newId;
+    },
     [],
+  );
+
+  const setSaveError = useCallback(
+    (conceptId: string, path: string, msg: string | null) => {
+      setData((d) => {
+        const forConcept = { ...(d.elementSaveErrors[conceptId] ?? {}) };
+        if (msg) forConcept[path] = msg;
+        else delete forConcept[path];
+        return {
+          ...d,
+          elementSaveErrors: {
+            ...d.elementSaveErrors,
+            [conceptId]: forConcept,
+          },
+        };
+      });
+    },
+    [],
+  );
+
+  const markFieldEdited = useCallback(
+    async (conceptId: string, path: string) => {
+      const current = dataRef.current.elementEditedFields[conceptId] ?? {};
+      if (current[path]) return; // already marked, skip DB write
+      const next = { ...current, [path]: true };
+      setData((d) => ({
+        ...d,
+        elementEditedFields: {
+          ...d.elementEditedFields,
+          [conceptId]: next,
+        },
+      }));
+      if (!dataRef.current.user) return;
+      const rowId = await ensureElementsRowId(conceptId);
+      const { error } = await supabase
+        .from("elements")
+        .update({ edited_fields: next as any, is_edited: true })
+        .eq("id", rowId);
+      if (error) throw error;
+    },
+    [ensureElementsRowId],
   );
 
   const updateConceptSection = useCallback<StoreContextValue["updateConceptSection"]>(
@@ -558,14 +651,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         });
         return { ...d, concepts };
       });
+      const paths = Object.keys(patch).map(
+        (f) => `sections.${sectionId}.${f}`,
+      );
+      paths.forEach((p) => setSaveError(conceptId, p, null));
       if (dataRef.current.user && updatedConcept) {
-        void supabase
-          .from("concepts")
-          .update({ concept_data: updatedConcept as any })
-          .eq("id", conceptId);
+        (async () => {
+          try {
+            const { error } = await supabase
+              .from("concepts")
+              .update({ concept_data: updatedConcept as any })
+              .eq("id", conceptId);
+            if (error) throw error;
+            for (const p of paths) {
+              await markFieldEdited(conceptId, p);
+            }
+          } catch (err) {
+            const msg =
+              err instanceof Error ? err.message : "Save failed. Try again.";
+            paths.forEach((p) => setSaveError(conceptId, p, msg));
+          }
+        })();
       }
     },
-    [],
+    [markFieldEdited, setSaveError],
+  );
+
+  const updateSectionBullets = useCallback(
+    (conceptId: string, sectionId: string, bullets: string[]) => {
+      updateConceptSection(conceptId, sectionId, { bullets });
+    },
+    [updateConceptSection],
   );
 
   const deleteProject = useCallback((projectId: string) => {
