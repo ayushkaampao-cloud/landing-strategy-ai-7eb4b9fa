@@ -818,6 +818,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     saveImages,
     getProductImages: (id) => data.productImages[id] ?? [],
     saveProductImages,
+    getProductImageCount: (id) => data.productImageCount[id] ?? 0,
     getVisualProfile: (id) => data.visualProfile[id] ?? null,
     saveVisualProfile,
   };
