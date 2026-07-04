@@ -195,7 +195,7 @@ function ConceptDetail() {
     return map;
   }, [images]);
 
-  const productImages = getProductImages(projectId);
+  const productImageCount = getProductImageCount(projectId);
   const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
   // generateRealImage only checks referenceImages.length > 0 to inject grounding
