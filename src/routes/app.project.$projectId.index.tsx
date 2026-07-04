@@ -11,12 +11,12 @@ export const Route = createFileRoute("/app/project/$projectId/")({
 
 function ProjectGallery() {
   const { projectId } = Route.useParams();
-  const { projects, products, concepts, getResearch, getProductImages, getVisualProfile } = useStore();
+  const { projects, products, concepts, getResearch, getProductImageCount, getVisualProfile } = useStore();
   const project = projects.find((p) => p.id === projectId);
   const product = products.find((p) => p.id === project?.productId);
   const projectConcepts = concepts.filter((c) => c.projectId === projectId);
   const research = getResearch(projectId);
-  const productImages = getProductImages(projectId);
+  const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
 
   if (!project) {
