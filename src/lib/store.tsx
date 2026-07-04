@@ -233,6 +233,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // elements
     const elementsMap: Record<string, LandingPageElements> = {};
     const elementRowIdByConcept: Record<string, string> = {};
+    const elementEditedFields: Record<string, Record<string, boolean>> = {};
     const imagesMap: Record<string, GeneratedImagePreview[]> = {};
     if (conceptIds.length > 0) {
       const { data: elemRows } = await supabase
@@ -248,6 +249,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (r.body_copy) elementsMap[r.concept_id] = JSON.parse(r.body_copy);
         } catch {
           /* ignore */
+        }
+        if (r.edited_fields && typeof r.edited_fields === "object") {
+          elementEditedFields[r.concept_id] = r.edited_fields as Record<string, boolean>;
         }
       });
       // reverse map elem row id -> concept id
