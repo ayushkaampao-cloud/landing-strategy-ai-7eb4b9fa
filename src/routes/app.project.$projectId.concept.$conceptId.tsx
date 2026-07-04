@@ -9,7 +9,7 @@ import { generateRealImage } from "@/lib/puter";
 import { storage } from "@/lib/storage";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, SectionProps } from "@/types";
+import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, ProductImageRef, SectionProps } from "@/types";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
   component: ConceptDetail,
