@@ -29,7 +29,6 @@ function ConceptDetail() {
     saveElements,
     getImages,
     saveImages,
-    getProductImages,
     getProductImageCount,
     getVisualProfile,
   } = useStore();
