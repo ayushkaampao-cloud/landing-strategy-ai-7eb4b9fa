@@ -16,7 +16,7 @@ interface Body {
   }[];
 }
 
-const GEMINI_IMAGE_MODEL = "google/gemini-2.5-flash-image";
+const GEMINI_IMAGE_MODEL = "google/gemini-3.1-flash-image";
 const LOVABLE_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 45_000;
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365; // 1 year
