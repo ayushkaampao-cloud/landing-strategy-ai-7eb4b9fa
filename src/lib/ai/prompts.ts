@@ -150,25 +150,10 @@ export function pickImageModeForSection(
   return isSaaS ? "abstract_brand_texture" : "iconographic_brand_visual";
 }
 
-// Deterministic seed pools for preview visuals. We do NOT use random Picsum.
-// Each pool is a hand-picked set of neutral / on-mode Picsum IDs that read as
-// the intended visual mode without depicting random scenery.
-// Picsum ID reference: https://picsum.photos/images
-const SEED_POOLS: Record<ImageMode, number[]> = {
-  interface_ui: [160, 119, 48, 96, 366], // muted geometric / abstract office
-  dashboard_closeup: [370, 48, 60, 119, 201], // screens / desks
-  comparison_graphic: [1, 20, 96, 160, 366], // flat geometric
-  abstract_brand_texture: [1027, 250, 1069, 1074, 1080], // abstract / textured
-  iconographic_brand_visual: [225, 250, 1080, 1074, 1069],
-  quote_card_visual: [225, 250, 1027, 1069, 1080],
-  data_visual_support: [48, 60, 96, 160, 366],
-  product_packshot: [30, 292, 490, 431, 1080],
-  product_in_use: [292, 431, 490, 30, 64],
-  ingredient_macro: [292, 431, 64, 30, 490],
-  material_detail: [431, 292, 30, 64, 490],
-  founder_story_editorial: [64, 91, 177, 342, 823],
-  no_image_needed: [1080],
-};
+// -------------------- Preview image URL --------------------
+// We use Pollinations.ai as a free text-to-image service so the "preview"
+// visuals actually reflect the section's imagePrompt/negativePrompt instead
+// of unrelated stock scenery.
 
 function hashStr(s: string): number {
   let h = 0;
@@ -176,16 +161,38 @@ function hashStr(s: string): number {
   return Math.abs(h);
 }
 
-export function previewUrlFor(mode: ImageMode, keySeed: string): string {
-  const pool = SEED_POOLS[mode] ?? SEED_POOLS.abstract_brand_texture;
-  const picked = pool[hashStr(keySeed) % pool.length];
-  // Slight grayscale/blur bias for abstract/support modes so they clearly read
-  // as "brand support visual" rather than pretending to be a real photo.
-  const treatment =
-    mode === "abstract_brand_texture" || mode === "iconographic_brand_visual" || mode === "quote_card_visual"
-      ? "?grayscale&blur=1"
-      : mode === "interface_ui" || mode === "data_visual_support" || mode === "comparison_graphic"
-        ? "?grayscale"
-        : "";
-  return `https://picsum.photos/id/${picked}/1200/800${treatment}`;
+/**
+ * Build a Pollinations.ai preview URL from a section's image prompt.
+ * - Prompt and negative prompt are combined into one descriptive string.
+ * - Seed is derived from sectionId so the same section always resolves to the
+ *   same image on reload. Pass `regenSeed` (e.g. a nonce from a "regenerate"
+ *   action) to force a different image while keeping determinism per attempt.
+ */
+export function pollinationsUrl(
+  imagePrompt: string,
+  negativePrompt?: string,
+  sectionId: string = "section",
+  regenSeed?: string,
+): string {
+  const positive = (imagePrompt || "").trim();
+  const negative = (negativePrompt || "").trim();
+  const combined = negative
+    ? `${positive}. AVOID: ${negative}`
+    : positive || "abstract brand texture";
+  const seedInput = regenSeed ? `${sectionId}|${regenSeed}` : sectionId;
+  const seed = hashStr(seedInput) % 1_000_000;
+  const encoded = encodeURIComponent(combined);
+  return `https://pollinations.ai/p/${encoded}?width=1200&height=800&seed=${seed}&nologo=true`;
 }
+
+/**
+ * Grounding prefix used on every image prompt when we have a description of
+ * the user's uploaded product photos. Downstream generators receive an image
+ * prompt that starts by pinning the exact visible product.
+ */
+export function groundingPrefix(profileSummary?: string | null): string {
+  const s = (profileSummary || "").trim();
+  if (!s) return "";
+  return `Product must visually match this exact description: ${s}. `;
+}
+
