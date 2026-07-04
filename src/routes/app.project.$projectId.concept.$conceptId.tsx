@@ -274,11 +274,16 @@ function ConceptDetail() {
     setImagesLoading(true);
     setImagesError(null);
     try {
+      const negBySection: Record<string, string | undefined> = {};
+      concept!.schema.sections.forEach((s) => {
+        negBySection[s.id] = s.negativePrompt;
+      });
       const items = [
         ...elements.hero.imagePrompts.map((p, i) => ({
           sectionId: `hero-${i}`,
           imagePrompt: p,
           imageStyle: elements.globalStyle.imageStyle,
+          negativePrompt: undefined as string | undefined,
         })),
         ...elements.sections.flatMap((sec) =>
           (sec.imagePrompts ?? []).map((p) => ({
@@ -286,6 +291,7 @@ function ConceptDetail() {
             imagePrompt: p,
             imageStyle: elements.globalStyle.imageStyle,
             imageMode: sec.imageMode,
+            negativePrompt: sec.negativePrompt ?? negBySection[sec.sectionId],
           })),
         ),
       ];
@@ -302,7 +308,10 @@ function ConceptDetail() {
       if (!res.ok) throw new Error("Image generation failed");
       const data = (await res.json()) as { previews: GeneratedImagePreview[] };
       saveImages(conceptId, data.previews);
+      setImgFailed({});
+      setImgRetry({});
       setImagesVersion((v) => v + 1);
+
     } catch (err) {
       setImagesError((err as Error).message);
     } finally {
