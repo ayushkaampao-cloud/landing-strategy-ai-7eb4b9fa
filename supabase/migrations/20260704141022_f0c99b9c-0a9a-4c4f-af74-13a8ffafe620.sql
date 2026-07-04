@@ -1,20 +1,3 @@
-## Fix: add RLS policies for the `generated-images` storage bucket
-
-The bucket is private. Server-side writes go through `supabaseAdmin` (service role, bypasses RLS) and reads are served via long-lived signed URLs (also bypass RLS at fetch time), so today the app works — but there are no policies on `storage.objects` scoped to this bucket, which the scanner flags.
-
-Uploaded object paths use the shape `generated/{projectId}/{sectionId}-{ts}.{ext}` (see `src/routes/api/generate-images.ts`). That means `storage.foldername(name)[2]` is the `projectId`, which is what we scope ownership by.
-
-### Migration
-
-Add four policies on `storage.objects` restricted to `bucket_id = 'generated-images'`, each verifying that the current user owns the project through `projects → brands (user_id = auth.uid())`:
-
-```sql
--- Ownership predicate: the object path's project segment maps to a brand
--- owned by the current user.
--- Path shape: generated/{projectId}/{filename}
---   storage.foldername(name) => ARRAY['generated', '<projectId>']
---   (storage.foldername(name))[2] is the projectId
-
 CREATE POLICY "generated_images_owner_select"
 ON storage.objects FOR SELECT TO authenticated
 USING (
@@ -71,10 +54,3 @@ USING (
       AND p.id::text = (storage.foldername(name))[2]
   )
 );
-```
-
-### Notes
-
-- Service-role uploads and signed-URL reads (the current runtime path) are unaffected — they bypass RLS.
-- Anyone with a valid signed URL still gets the object (signed URLs are the intended sharing mechanism); the policies additionally restrict any direct authenticated Data API access to the owning user only.
-- No app-code changes required. After the migration runs, resolve the finding via `manage_security_finding`.
