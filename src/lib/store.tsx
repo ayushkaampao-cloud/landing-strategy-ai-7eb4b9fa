@@ -280,18 +280,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // product visual profiles
     const visualProfileMap: Record<string, ProductVisualProfile | null> = {};
     const productImagesMap: Record<string, ProductImageRef[]> = {};
+    const productImageCountMap: Record<string, number> = {};
     if (projectIds.length > 0) {
       // NOTE: Do NOT select source_image_urls here — it holds base64 dataUrls
       // used only by the server-side image generation route, and pulling them
       // into the client on every refresh causes multi-MB payloads / timeouts
       // that can silently blank the app shell. The server reads them via the
-      // admin client when generating images.
+      // admin client when generating images. We only pull the lightweight
+      // image_count generated column so the UI can show the grounding count.
       const { data: pvpRows } = await supabase
         .from("product_visual_profiles")
-        .select("id, project_id, profile, description")
+        .select("id, project_id, profile, description, image_count")
         .in("project_id", projectIds);
       (pvpRows ?? []).forEach((r: any) => {
         visualProfileMap[r.project_id] = (r.profile as ProductVisualProfile) ?? null;
+        productImageCountMap[r.project_id] = (r.image_count as number) ?? 0;
       });
     }
 
@@ -306,6 +309,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       elements: elementsMap,
       images: imagesMap,
       productImages: productImagesMap,
+      productImageCount: productImageCountMap,
       visualProfile: visualProfileMap,
       elementRowIdByConcept,
       loaded: true,
