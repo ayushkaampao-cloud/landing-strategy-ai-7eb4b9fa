@@ -30,6 +30,7 @@ function ConceptDetail() {
     getImages,
     saveImages,
     getProductImages,
+    getProductImageCount,
     getVisualProfile,
   } = useStore();
   const [copied, setCopied] = useState<string | null>(null);
