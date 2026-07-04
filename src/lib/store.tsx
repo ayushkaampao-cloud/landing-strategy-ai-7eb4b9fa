@@ -941,7 +941,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     createProduct,
     createProject,
     saveConcepts,
+    saveConceptsAsync,
     updateConceptSection,
+    updateSectionBullets,
+    isFieldEdited: (conceptId, path) =>
+      !!(data.elementEditedFields[conceptId]?.[path]),
+    getEditedFields: (conceptId) => data.elementEditedFields[conceptId] ?? {},
+    getFieldSaveError: (conceptId, path) =>
+      data.elementSaveErrors[conceptId]?.[path],
     deleteProject,
     deleteWorkspace,
     version,
