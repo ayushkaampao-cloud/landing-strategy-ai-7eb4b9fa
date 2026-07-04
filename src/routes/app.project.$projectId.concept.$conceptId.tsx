@@ -7,7 +7,7 @@ import { GroundingBadge } from "@/components/GroundingBadge";
 import { VisualProfileSummary } from "@/components/VisualProfileSummary";
 import { generateRealImage } from "@/lib/puter";
 import { storage } from "@/lib/storage";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, ProductImageRef, SectionProps } from "@/types";
 
