@@ -172,6 +172,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          image_count: number | null
           profile: Json | null
           project_id: string
           source_image_urls: Json | null
@@ -180,6 +181,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          image_count?: number | null
           profile?: Json | null
           project_id: string
           source_image_urls?: Json | null
@@ -188,6 +190,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          image_count?: number | null
           profile?: Json | null
           project_id?: string
           source_image_urls?: Json | null
