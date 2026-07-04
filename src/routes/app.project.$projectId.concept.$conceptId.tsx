@@ -197,7 +197,23 @@ function ConceptDetail() {
   }, [images]);
 
   const productImages = getProductImages(projectId);
+  const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
+  // generateRealImage only checks referenceImages.length > 0 to inject grounding
+  // text, so a single placeholder is enough after refresh when the count > 0.
+  const referenceImagesForReal: ProductImageRef[] =
+    productImageCount > 0
+      ? [
+          {
+            id: "ref",
+            dataUrl: "",
+            width: 0,
+            height: 0,
+            addedAt: new Date().toISOString(),
+            order: 0,
+          },
+        ]
+      : [];
 
   async function handleGenerateRealImage(sectionId: string) {
     const img = imageBySection[sectionId];
