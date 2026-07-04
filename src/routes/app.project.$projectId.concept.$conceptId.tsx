@@ -22,8 +22,12 @@ function ConceptDetail() {
     products,
     workspaces,
     concepts,
-    saveConcepts,
+    saveConceptsAsync,
     updateConceptSection,
+    updateSectionBullets,
+    isFieldEdited,
+    getEditedFields,
+    getFieldSaveError,
     getResearch,
     getElements,
     saveElements,
@@ -32,6 +36,11 @@ function ConceptDetail() {
     getProductImageCount,
     getVisualProfile,
   } = useStore();
+  // All hooks are declared unconditionally at the top of the component to
+  // keep hook order stable across renders. A prior version declared
+  // `useState(regenerating)` after the early return below, which caused
+  // React to unmount the tree whenever `concept` was briefly missing and
+  // surfaced as a spurious "Concept not found" screen.
   const [copied, setCopied] = useState<string | null>(null);
   const [elementsLoading, setElementsLoading] = useState(false);
   const [elementsError, setElementsError] = useState<string | null>(null);
@@ -45,8 +54,8 @@ function ConceptDetail() {
   // retry nonce that lets the user reload without regenerating the URL.
   const [imgFailed, setImgFailed] = useState<Record<string, boolean>>({});
   const [imgRetry, setImgRetry] = useState<Record<string, number>>({});
-
-
+  const [regenerating, setRegenerating] = useState(false);
+  const regeneratingRef = useRef(false);
 
   const project = projects.find((p) => p.id === projectId);
   const product = products.find((p) => p.id === project?.productId);
