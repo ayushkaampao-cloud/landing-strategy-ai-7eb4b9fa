@@ -65,6 +65,15 @@ function buildFullPrompt(input: GenerateRealImageInput): string {
   parts.push(input.prompt.trim());
   if (input.visualProfile) {
     const p = input.visualProfile;
+    // Prefer summaryText — it's the observed description from the uploaded
+    // photos. The structural fields are only populated when a richer vision
+    // pipeline fills them; skip any that are empty so we never inject
+    // invented attributes.
+    if (p.summaryText?.trim()) {
+      parts.push(
+        `Product must visually match this exact description from the uploaded photos: ${p.summaryText.trim()}`,
+      );
+    }
     const grounding = [
       p.mustPreserve?.length && `Preserve: ${p.mustPreserve.join(", ")}`,
       p.visibleMaterials?.length && `Materials: ${p.visibleMaterials.join(", ")}`,
