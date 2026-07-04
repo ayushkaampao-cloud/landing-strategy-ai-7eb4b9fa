@@ -487,9 +487,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ],
       }));
       if (dataRef.current.user) {
-        // delete old + insert new
+        // Upsert to preserve existing concept row ids so ON DELETE CASCADE
+        // does NOT wipe elements/image_previews for unchanged siblings.
         (async () => {
-          await supabase.from("concepts").delete().eq("project_id", projectId);
+          const keepIds = concepts.map((c) => c.id);
           if (concepts.length > 0) {
             const rows = concepts.map((c) => ({
               id: c.id,
@@ -497,8 +498,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               framework_name: c.templateFamily,
               concept_data: c as any,
             }));
-            await supabase.from("concepts").insert(rows);
+            await supabase.from("concepts").upsert(rows, { onConflict: "id" });
           }
+          // Delete only concepts that were actually removed from the project.
+          let del = supabase.from("concepts").delete().eq("project_id", projectId);
+          if (keepIds.length > 0) {
+            del = del.not("id", "in", `(${keepIds.map((id) => `"${id}"`).join(",")})`);
+          }
+          await del;
         })().catch((e) => console.error("saveConcepts db", e));
       }
     },
