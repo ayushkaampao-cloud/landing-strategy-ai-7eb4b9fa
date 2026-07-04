@@ -252,11 +252,13 @@ function ConceptDetail() {
           },
           research: research ?? undefined,
           classification: research?.classification,
+          visualProfile: visualProfile ?? undefined,
         }),
       });
       clearInterval(stepTimer);
       if (!res.ok) throw new Error((await res.text()) || "Element generation failed");
       const data = (await res.json()) as LandingPageElements;
+
       saveElements(conceptId, data);
       setElementsVersion((v) => v + 1);
       setElementsStep(4);
