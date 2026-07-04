@@ -41,6 +41,11 @@ function ConceptDetail() {
   const [elementsVersion, setElementsVersion] = useState(0);
   const [imagesVersion, setImagesVersion] = useState(0);
   const [realGenerating, setRealGenerating] = useState<Record<string, boolean>>({});
+  // Section IDs whose preview image failed to load, plus a per-section
+  // retry nonce that lets the user reload without regenerating the URL.
+  const [imgFailed, setImgFailed] = useState<Record<string, boolean>>({});
+  const [imgRetry, setImgRetry] = useState<Record<string, number>>({});
+
 
 
   const project = projects.find((p) => p.id === projectId);
