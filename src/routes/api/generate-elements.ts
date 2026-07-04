@@ -4,6 +4,7 @@ import {
   buildVisualBrief,
   categoryGuidance,
   factsBlock,
+  groundingPrefix,
   NO_FABRICATION_RULE,
   pickImageModeForSection,
   UNIVERSAL_NEGATIVE_PROMPT,
@@ -15,6 +16,7 @@ import type {
   LandingPageElementsSection,
   ProjectClassification,
   ProjectResearch,
+  ProductVisualProfile,
 } from "@/types";
 
 interface Body {
@@ -24,7 +26,11 @@ interface Body {
   /** Optional — passed through from the client so elements are category-aware. */
   research?: ProjectResearch;
   classification?: ProjectClassification;
+  /** Optional — the analyzed product-photo profile for this project. When
+   *  present, its summaryText is prepended to every image prompt. */
+  visualProfile?: ProductVisualProfile | null;
 }
+
 
 const ELEMENTS_SCHEMA = {
   type: "object",
