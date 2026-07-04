@@ -3,6 +3,9 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Sign in — Landing Page AI" },
@@ -21,13 +24,19 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const { signUp, signInWithPassword, user, workspaces, loaded } = useStore();
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
 
   useEffect(() => {
     if (user && loaded) {
+      // Honor a same-origin relative `next` (e.g. OAuth consent return URL).
+      if (next && next.startsWith("/") && !next.startsWith("//")) {
+        window.location.href = next;
+        return;
+      }
       if (workspaces.length === 0) navigate({ to: "/app/brand/new" });
       else navigate({ to: "/app" });
     }
-  }, [user, workspaces.length, loaded, navigate]);
+  }, [user, workspaces.length, loaded, navigate, next]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
