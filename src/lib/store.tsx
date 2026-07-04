@@ -679,7 +679,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveProductImages = useCallback(
     (projectId: string, imgs: ProductImageRef[]) => {
-      setData((d) => ({ ...d, productImages: { ...d.productImages, [projectId]: imgs } }));
+      setData((d) => ({
+        ...d,
+        productImages: { ...d.productImages, [projectId]: imgs },
+        productImageCount: { ...d.productImageCount, [projectId]: imgs.length },
+      }));
       bump();
       if (dataRef.current.user) {
         (async () => {
