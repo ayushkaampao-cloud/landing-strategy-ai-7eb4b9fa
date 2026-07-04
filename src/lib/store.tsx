@@ -321,6 +321,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       productImageCount: productImageCountMap,
       visualProfile: visualProfileMap,
       elementRowIdByConcept,
+      elementEditedFields,
+      elementSaveErrors: {},
       loaded: true,
     });
 
