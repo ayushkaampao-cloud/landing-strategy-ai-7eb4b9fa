@@ -1,5 +1,6 @@
 import type { SectionProps } from "@/types";
 import { Editable } from "./Editable";
+import { EditableBullets } from "./EditableBullets";
 
 type EditField = keyof Pick<
   SectionProps,
@@ -9,6 +10,10 @@ type EditField = keyof Pick<
 interface Props {
   section: SectionProps;
   onEdit?: (field: EditField, value: string) => void;
+  onEditBullets?: (bullets: string[]) => void;
+  onEditItems?: (items: { title: string; body: string }[]) => void;
+  isEdited?: (path: string) => boolean;
+  saveError?: (path: string) => string | undefined;
 }
 
 function PlaceholderBadge({ section }: { section: SectionProps }) {
@@ -22,11 +27,10 @@ function PlaceholderBadge({ section }: { section: SectionProps }) {
   );
 }
 
-export function SectionRenderer({ section, onEdit }: Props) {
-  const s = section;
+export function SectionRenderer(props: Props) {
+  const s = props.section;
   const needsBadge = s.placeholder || s.proofNeeded;
-  const editable = !!onEdit && (s.placeholder === true || s.proofNeeded === true);
-  const content = renderSection(s, editable ? onEdit : undefined);
+  const content = renderSection(s, props);
   if (!needsBadge) return content;
   return (
     <div className="relative">
@@ -38,10 +42,8 @@ export function SectionRenderer({ section, onEdit }: Props) {
   );
 }
 
-function renderSection(
-  s: SectionProps,
-  onEdit?: (field: EditField, v: string) => void,
-) {
+function renderSection(s: SectionProps, props: Props) {
+  const { onEdit, onEditBullets, onEditItems, isEdited, saveError } = props;
   const E = (
     field: EditField,
     placeholder: string,
@@ -49,6 +51,7 @@ function renderSection(
     className?: string,
   ) => {
     if (!onEdit) return <>{s[field] ?? placeholder}</>;
+    const path = `${field}`;
     return (
       <Editable
         value={s[field] as string | undefined}
@@ -57,7 +60,76 @@ function renderSection(
         onSave={(v) => onEdit(field, v)}
         isPlaceholder={s.placeholder}
         className={className}
+        edited={isEdited?.(path)}
+        saveError={saveError?.(path)}
       />
+    );
+  };
+
+  const renderBullets = (bullets: string[] | undefined) => {
+    if (!onEditBullets) {
+      return (
+        <ul className="space-y-1">
+          {(bullets ?? []).map((b, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm">
+              <span className="mt-1.5 size-1.5 rounded-full bg-accent shrink-0" />
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <EditableBullets
+        bullets={bullets ?? []}
+        onChange={onEditBullets}
+        edited={isEdited?.("bullets")}
+        saveError={saveError?.("bullets")}
+      />
+    );
+  };
+
+  const renderItem = (
+    it: { title: string; body: string },
+    i: number,
+    titleClass: string,
+    bodyClass: string,
+  ) => {
+    if (!onEditItems) {
+      return (
+        <>
+          <h3 className={titleClass}>{it.title}</h3>
+          <p className={bodyClass}>{it.body}</p>
+        </>
+      );
+    }
+    const updateItem = (patch: Partial<{ title: string; body: string }>) => {
+      const next = (s.items ?? []).slice();
+      next[i] = { ...next[i], ...patch };
+      onEditItems(next);
+    };
+    return (
+      <>
+        <h3 className={titleClass}>
+          <Editable
+            value={it.title}
+            placeholder="Add title"
+            onSave={(v) => updateItem({ title: v })}
+            edited={isEdited?.(`items.${i}.title`)}
+            saveError={saveError?.(`items.${i}.title`)}
+          />
+        </h3>
+        <p className={bodyClass}>
+          <Editable
+            value={it.body}
+            placeholder="Add body"
+            multiline
+            onSave={(v) => updateItem({ body: v })}
+            edited={isEdited?.(`items.${i}.body`)}
+            saveError={saveError?.(`items.${i}.body`)}
+          />
+        </p>
+      </>
     );
   };
 
@@ -97,14 +169,7 @@ function renderSection(
     case "benefit-strip":
       return (
         <section className="px-10 py-8 bg-surface-muted border-b border-border">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {(s.bullets ?? []).map((b, i) => (
-              <div key={i} className="text-sm font-medium flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-accent" />
-                {b}
-              </div>
-            ))}
-          </div>
+          {renderBullets(s.bullets)}
         </section>
       );
 
@@ -125,13 +190,21 @@ function renderSection(
     case "feature-grid":
       return (
         <section className="px-10 py-14 border-b border-border">
-          {s.title && <h2 className="text-2xl font-semibold tracking-tight mb-6">{E("title", "Add feature grid title")}</h2>}
+          {(s.title || onEdit) && (
+            <h2 className="text-2xl font-semibold tracking-tight mb-6">
+              {E("title", "Add feature grid title")}
+            </h2>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {(s.items ?? []).map((it, i) => (
               <div key={i} className="p-5 border border-border rounded-lg bg-surface">
                 <div className="mono-tag text-muted-foreground mb-2">0{i + 1}</div>
-                <h3 className="font-semibold mb-1">{it.title}</h3>
-                <p className="text-sm text-muted-foreground">{it.body}</p>
+                {renderItem(
+                  it,
+                  i,
+                  "font-semibold mb-1",
+                  "text-sm text-muted-foreground",
+                )}
               </div>
             ))}
           </div>
@@ -162,15 +235,18 @@ function renderSection(
     case "comparison":
       return (
         <section className="px-10 py-14 border-b border-border">
-          {s.title && <h2 className="text-2xl font-semibold tracking-tight mb-6">{E("title", "Add comparison title")}</h2>}
+          {(s.title || onEdit) && (
+            <h2 className="text-2xl font-semibold tracking-tight mb-6">
+              {E("title", "Add comparison title")}
+            </h2>
+          )}
           <div className="grid grid-cols-2 gap-4">
             {(s.items ?? []).map((it, i) => (
               <div
                 key={i}
                 className={`p-5 rounded-lg border ${i === 1 ? "border-ink bg-surface" : "border-border bg-surface-muted text-muted-foreground"}`}
               >
-                <h3 className="font-semibold mb-2">{it.title}</h3>
-                <p className="text-sm">{it.body}</p>
+                {renderItem(it, i, "font-semibold mb-2", "text-sm")}
               </div>
             ))}
           </div>
@@ -180,16 +256,18 @@ function renderSection(
     case "social-proof":
       return (
         <section className="px-10 py-14 border-b border-border text-center">
-          {s.title && <div className="mono-tag text-muted-foreground mb-3">{E("title", "Add proof label")}</div>}
+          {(s.title || onEdit) && (
+            <div className="mono-tag text-muted-foreground mb-3">
+              {E("title", "Add proof label")}
+            </div>
+          )}
           <p className="text-xl font-medium italic max-w-2xl mx-auto leading-relaxed">
             {E("body", "Add real customer testimonial here", true)}
           </p>
           <p className="mt-4 mono-tag">{E("highlight", "Add attribution (name, role)")}</p>
-          {s.bullets && (
-            <div className="flex justify-center gap-8 mt-6 flex-wrap">
-              {s.bullets.map((b, i) => (
-                <span key={i} className="mono-tag text-muted-foreground">{b}</span>
-              ))}
+          {(s.bullets || onEditBullets) && (
+            <div className="mt-6 max-w-md mx-auto text-left">
+              {renderBullets(s.bullets)}
             </div>
           )}
         </section>
@@ -198,12 +276,15 @@ function renderSection(
     case "faq":
       return (
         <section className="px-10 py-14 border-b border-border">
-          {s.title && <h2 className="text-2xl font-semibold tracking-tight mb-6">{E("title", "Add FAQ title")}</h2>}
+          {(s.title || onEdit) && (
+            <h2 className="text-2xl font-semibold tracking-tight mb-6">
+              {E("title", "Add FAQ title")}
+            </h2>
+          )}
           <div className="divide-y divide-border border-y border-border">
             {(s.items ?? []).map((it, i) => (
               <div key={i} className="py-4">
-                <h3 className="font-medium mb-1">{it.title}</h3>
-                <p className="text-sm text-muted-foreground">{it.body}</p>
+                {renderItem(it, i, "font-medium mb-1", "text-sm text-muted-foreground")}
               </div>
             ))}
           </div>
@@ -239,15 +320,12 @@ function renderSection(
     case "details":
       return (
         <section className="px-10 py-14 border-b border-border">
-          {s.title && <h2 className="text-2xl font-semibold tracking-tight mb-4">{E("title", "Add details title")}</h2>}
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-            {(s.bullets ?? []).map((b, i) => (
-              <li key={i} className="flex gap-2 py-1 border-b border-border/60">
-                <span className="mono-tag text-muted-foreground">0{i + 1}</span>
-                <span>{b}</span>
-              </li>
-            ))}
-          </ul>
+          {(s.title || onEdit) && (
+            <h2 className="text-2xl font-semibold tracking-tight mb-4">
+              {E("title", "Add details title")}
+            </h2>
+          )}
+          {renderBullets(s.bullets)}
         </section>
       );
 

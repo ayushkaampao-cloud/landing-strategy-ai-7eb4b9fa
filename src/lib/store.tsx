@@ -38,6 +38,8 @@ interface AppData {
   productImageCount: Record<string, number>;
   visualProfile: Record<string, ProductVisualProfile | null>;
   elementRowIdByConcept: Record<string, string>; // concept.id -> elements table row id
+  elementEditedFields: Record<string, Record<string, boolean>>; // conceptId -> field path -> true
+  elementSaveErrors: Record<string, Record<string, string>>; // conceptId -> field path -> error msg
   loaded: boolean;
 }
 
@@ -55,6 +57,8 @@ const empty: AppData = {
   productImageCount: {},
   visualProfile: {},
   elementRowIdByConcept: {},
+  elementEditedFields: {},
+  elementSaveErrors: {},
   loaded: false,
 };
 
@@ -69,11 +73,23 @@ interface StoreContextValue extends AppData {
   createProduct: (input: Omit<Product, "id" | "createdAt">) => Product;
   createProject: (input: Omit<Project, "id" | "createdAt">) => Project;
   saveConcepts: (projectId: string, concepts: LandingPageConcept[]) => void;
+  saveConceptsAsync: (
+    projectId: string,
+    concepts: LandingPageConcept[],
+  ) => Promise<void>;
   updateConceptSection: (
     conceptId: string,
     sectionId: string,
     patch: Partial<import("@/types").SectionProps>,
   ) => void;
+  updateSectionBullets: (
+    conceptId: string,
+    sectionId: string,
+    bullets: string[],
+  ) => void;
+  isFieldEdited: (conceptId: string, path: string) => boolean;
+  getEditedFields: (conceptId: string) => Record<string, boolean>;
+  getFieldSaveError: (conceptId: string, path: string) => string | undefined;
   deleteProject: (projectId: string) => void;
   deleteWorkspace: (workspaceId: string) => void;
   activeWorkspace: Workspace | null;
@@ -229,6 +245,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // elements
     const elementsMap: Record<string, LandingPageElements> = {};
     const elementRowIdByConcept: Record<string, string> = {};
+    const elementEditedFields: Record<string, Record<string, boolean>> = {};
     const imagesMap: Record<string, GeneratedImagePreview[]> = {};
     if (conceptIds.length > 0) {
       const { data: elemRows } = await supabase
@@ -244,6 +261,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (r.body_copy) elementsMap[r.concept_id] = JSON.parse(r.body_copy);
         } catch {
           /* ignore */
+        }
+        if (r.edited_fields && typeof r.edited_fields === "object") {
+          elementEditedFields[r.concept_id] = r.edited_fields as Record<string, boolean>;
         }
       });
       // reverse map elem row id -> concept id
@@ -313,6 +333,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       productImageCount: productImageCountMap,
       visualProfile: visualProfileMap,
       elementRowIdByConcept,
+      elementEditedFields,
+      elementSaveErrors: {},
       loaded: true,
     });
 
@@ -486,6 +508,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return p;
   }, []);
 
+  const persistConceptsToDb = useCallback(
+    async (projectId: string, concepts: LandingPageConcept[]) => {
+      const keepIds = concepts.map((c) => c.id);
+      if (concepts.length > 0) {
+        const rows = concepts.map((c) => ({
+          id: c.id,
+          project_id: projectId,
+          framework_name: c.templateFamily,
+          concept_data: c as any,
+        }));
+        const { error: upErr } = await supabase
+          .from("concepts")
+          .upsert(rows, { onConflict: "id" });
+        if (upErr) throw upErr;
+      }
+      let del = supabase.from("concepts").delete().eq("project_id", projectId);
+      if (keepIds.length > 0) {
+        del = del.not(
+          "id",
+          "in",
+          `(${keepIds.map((id) => `"${id}"`).join(",")})`,
+        );
+      }
+      const { error: delErr } = await del;
+      if (delErr) throw delErr;
+    },
+    [],
+  );
+
   const saveConcepts = useCallback(
     (projectId: string, concepts: LandingPageConcept[]) => {
       setData((d) => ({
@@ -496,29 +547,93 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ],
       }));
       if (dataRef.current.user) {
-        // Upsert to preserve existing concept row ids so ON DELETE CASCADE
-        // does NOT wipe elements/image_previews for unchanged siblings.
-        (async () => {
-          const keepIds = concepts.map((c) => c.id);
-          if (concepts.length > 0) {
-            const rows = concepts.map((c) => ({
-              id: c.id,
-              project_id: projectId,
-              framework_name: c.templateFamily,
-              concept_data: c as any,
-            }));
-            await supabase.from("concepts").upsert(rows, { onConflict: "id" });
-          }
-          // Delete only concepts that were actually removed from the project.
-          let del = supabase.from("concepts").delete().eq("project_id", projectId);
-          if (keepIds.length > 0) {
-            del = del.not("id", "in", `(${keepIds.map((id) => `"${id}"`).join(",")})`);
-          }
-          await del;
-        })().catch((e) => console.error("saveConcepts db", e));
+        persistConceptsToDb(projectId, concepts).catch((e) =>
+          console.error("saveConcepts db", e),
+        );
       }
     },
+    [persistConceptsToDb],
+  );
+
+  const saveConceptsAsync = useCallback(
+    async (projectId: string, concepts: LandingPageConcept[]) => {
+      if (dataRef.current.user) {
+        await persistConceptsToDb(projectId, concepts);
+      }
+      setData((d) => ({
+        ...d,
+        concepts: [
+          ...d.concepts.filter((c) => c.projectId !== projectId),
+          ...concepts,
+        ],
+      }));
+    },
+    [persistConceptsToDb],
+  );
+
+  const ensureElementsRowId = useCallback(
+    async (conceptId: string): Promise<string> => {
+      const existing = dataRef.current.elementRowIdByConcept[conceptId];
+      if (existing) return existing;
+      const newId = uid();
+      const { error } = await supabase.from("elements").insert({
+        id: newId,
+        concept_id: conceptId,
+        section_id: "__doc__",
+        body_copy: null,
+      });
+      if (error) throw error;
+      setData((d) => ({
+        ...d,
+        elementRowIdByConcept: {
+          ...d.elementRowIdByConcept,
+          [conceptId]: newId,
+        },
+      }));
+      return newId;
+    },
     [],
+  );
+
+  const setSaveError = useCallback(
+    (conceptId: string, path: string, msg: string | null) => {
+      setData((d) => {
+        const forConcept = { ...(d.elementSaveErrors[conceptId] ?? {}) };
+        if (msg) forConcept[path] = msg;
+        else delete forConcept[path];
+        return {
+          ...d,
+          elementSaveErrors: {
+            ...d.elementSaveErrors,
+            [conceptId]: forConcept,
+          },
+        };
+      });
+    },
+    [],
+  );
+
+  const markFieldEdited = useCallback(
+    async (conceptId: string, path: string) => {
+      const current = dataRef.current.elementEditedFields[conceptId] ?? {};
+      if (current[path]) return; // already marked, skip DB write
+      const next = { ...current, [path]: true };
+      setData((d) => ({
+        ...d,
+        elementEditedFields: {
+          ...d.elementEditedFields,
+          [conceptId]: next,
+        },
+      }));
+      if (!dataRef.current.user) return;
+      const rowId = await ensureElementsRowId(conceptId);
+      const { error } = await supabase
+        .from("elements")
+        .update({ edited_fields: next as any, is_edited: true })
+        .eq("id", rowId);
+      if (error) throw error;
+    },
+    [ensureElementsRowId],
   );
 
   const updateConceptSection = useCallback<StoreContextValue["updateConceptSection"]>(
@@ -536,14 +651,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         });
         return { ...d, concepts };
       });
+      const paths = Object.keys(patch).map(
+        (f) => `sections.${sectionId}.${f}`,
+      );
+      paths.forEach((p) => setSaveError(conceptId, p, null));
       if (dataRef.current.user && updatedConcept) {
-        void supabase
-          .from("concepts")
-          .update({ concept_data: updatedConcept as any })
-          .eq("id", conceptId);
+        (async () => {
+          try {
+            const { error } = await supabase
+              .from("concepts")
+              .update({ concept_data: updatedConcept as any })
+              .eq("id", conceptId);
+            if (error) throw error;
+            for (const p of paths) {
+              await markFieldEdited(conceptId, p);
+            }
+          } catch (err) {
+            const msg =
+              err instanceof Error ? err.message : "Save failed. Try again.";
+            paths.forEach((p) => setSaveError(conceptId, p, msg));
+          }
+        })();
       }
     },
-    [],
+    [markFieldEdited, setSaveError],
+  );
+
+  const updateSectionBullets = useCallback(
+    (conceptId: string, sectionId: string, bullets: string[]) => {
+      updateConceptSection(conceptId, sectionId, { bullets });
+    },
+    [updateConceptSection],
   );
 
   const deleteProject = useCallback((projectId: string) => {
@@ -601,7 +739,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (existingId) {
       await supabase
         .from("elements")
-        .update({ body_copy: JSON.stringify(e), is_edited: true })
+        .update({ body_copy: JSON.stringify(e) })
         .eq("id", existingId);
       return existingId;
     } else {
@@ -803,7 +941,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     createProduct,
     createProject,
     saveConcepts,
+    saveConceptsAsync,
     updateConceptSection,
+    updateSectionBullets,
+    isFieldEdited: (conceptId, path) =>
+      !!(data.elementEditedFields[conceptId]?.[path]),
+    getEditedFields: (conceptId) => data.elementEditedFields[conceptId] ?? {},
+    getFieldSaveError: (conceptId, path) =>
+      data.elementSaveErrors[conceptId]?.[path],
     deleteProject,
     deleteWorkspace,
     version,
