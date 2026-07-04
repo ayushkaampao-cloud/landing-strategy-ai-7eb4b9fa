@@ -35,6 +35,7 @@ interface AppData {
   elements: Record<string, LandingPageElements>;
   images: Record<string, GeneratedImagePreview[]>;
   productImages: Record<string, ProductImageRef[]>;
+  productImageCount: Record<string, number>;
   visualProfile: Record<string, ProductVisualProfile | null>;
   elementRowIdByConcept: Record<string, string>; // concept.id -> elements table row id
   loaded: boolean;
@@ -51,6 +52,7 @@ const empty: AppData = {
   elements: {},
   images: {},
   productImages: {},
+  productImageCount: {},
   visualProfile: {},
   elementRowIdByConcept: {},
   loaded: false,
