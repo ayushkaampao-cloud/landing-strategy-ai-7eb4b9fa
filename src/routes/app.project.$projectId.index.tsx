@@ -93,7 +93,7 @@ function ProjectGallery() {
   return (
     <>
       <TopBar>
-        <GroundingBadge count={productImages.length} hasProfile={!!visualProfile} />
+        <GroundingBadge count={productImageCount} hasProfile={!!visualProfile} />
         <span className="mono-tag text-muted-foreground">{project.goal}</span>
       </TopBar>
       <div className="p-8 max-w-7xl">
