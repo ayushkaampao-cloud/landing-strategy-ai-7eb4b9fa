@@ -352,6 +352,11 @@ function ConceptDetail() {
               {concept.schema.sections.map((s) => {
                 const img = imageBySection[s.id];
                 const isPlaceholderImg = img && img.status === "placeholder" && !img.realUrl;
+                // Empty/missing url from a failed prior generation must not
+                // render <img src=""> — treat as the failed/retry branch.
+                const activeUrl = img?.realUrl || img?.previewUrl || "";
+                const isMissingUrl = !!img && !isPlaceholderImg && !activeUrl;
+                const showFailed = !!img && !isPlaceholderImg && (imgFailed[s.id] || isMissingUrl || img.status === "failed");
                 return (
                   <div key={s.id} id={`section-${s.id}`}>
                     <SectionRenderer
@@ -384,7 +389,7 @@ function ConceptDetail() {
                                 </div>
                               </div>
                             </div>
-                          ) : imgFailed[s.id] ? (
+                          ) : showFailed ? (
                             <div className="aspect-[16/9] bg-neutral-200 dark:bg-neutral-800 grid place-items-center">
                               <div className="text-center px-6">
                                 <div className="text-sm font-medium mb-1 text-muted-foreground">
@@ -408,11 +413,11 @@ function ConceptDetail() {
                           ) : (
                             <div className="relative">
                               <img
-                                key={`${img.realUrl ?? img.previewUrl}#${imgRetry[s.id] ?? 0}`}
+                                key={`${activeUrl}#${imgRetry[s.id] ?? 0}`}
                                 src={
-                                  (img.realUrl ?? img.previewUrl) +
+                                  activeUrl +
                                   (imgRetry[s.id]
-                                    ? (img.previewUrl.includes("?") ? "&" : "?") + `_r=${imgRetry[s.id]}`
+                                    ? (activeUrl.includes("?") ? "&" : "?") + `_r=${imgRetry[s.id]}`
                                     : "")
                                 }
                                 alt="Section preview"

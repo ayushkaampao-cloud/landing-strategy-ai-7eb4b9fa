@@ -279,15 +279,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const visualProfileMap: Record<string, ProductVisualProfile | null> = {};
     const productImagesMap: Record<string, ProductImageRef[]> = {};
     if (projectIds.length > 0) {
+      // NOTE: Do NOT select source_image_urls here — it holds base64 dataUrls
+      // used only by the server-side image generation route, and pulling them
+      // into the client on every refresh causes multi-MB payloads / timeouts
+      // that can silently blank the app shell. The server reads them via the
+      // admin client when generating images.
       const { data: pvpRows } = await supabase
         .from("product_visual_profiles")
-        .select("*")
+        .select("id, project_id, profile, description")
         .in("project_id", projectIds);
       (pvpRows ?? []).forEach((r: any) => {
         visualProfileMap[r.project_id] = (r.profile as ProductVisualProfile) ?? null;
-        if (Array.isArray(r.source_image_urls)) {
-          productImagesMap[r.project_id] = r.source_image_urls as ProductImageRef[];
-        }
       });
     }
 
