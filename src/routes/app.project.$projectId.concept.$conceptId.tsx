@@ -549,7 +549,7 @@ function ConceptDetail() {
             <div className="mb-6">
               <VisualProfileSummary
                 profile={visualProfile}
-                imageCount={productImages.length}
+                imageCount={productImageCount}
                 compact
               />
             </div>
