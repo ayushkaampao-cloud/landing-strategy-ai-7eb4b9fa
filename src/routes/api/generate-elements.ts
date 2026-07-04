@@ -150,6 +150,8 @@ export const Route = createFileRoute("/api/generate-elements")({
             body.research,
           );
 
+          const grounding = groundingPrefix(body.visualProfile?.summaryText);
+
           const sections: LandingPageElementsSection[] = (raw.sections ?? []).map((s, i) => {
             const match =
               sectionsInput.find((x) => x.type === (s.sectionType as string) || x.title === s.sectionRef) ??
@@ -161,6 +163,7 @@ export const Route = createFileRoute("/api/generate-elements")({
               imageMode,
               visualBrief.brandName,
               body.product.name,
+              grounding,
             );
             return {
               sectionId: match?.id ?? `s${i}`,
@@ -186,7 +189,9 @@ export const Route = createFileRoute("/api/generate-elements")({
             heroMode,
             visualBrief.brandName,
             body.product.name,
+            grounding,
           );
+
 
           const elements: LandingPageElements = {
             conceptId: body.concept.id,
