@@ -222,14 +222,16 @@ function enrichPrompts(
   mode: ImageMode,
   brandName: string,
   productName: string,
+  grounding: string = "",
 ): string[] {
   if (mode === "no_image_needed") return [];
   const modePrefix = MODE_PREFIX[mode] ?? "";
   return prompts.map((p) => {
     const base = (p || "").trim();
-    return `[${mode}] ${modePrefix} ${base} — brand: ${brandName}, product: ${productName}. NEGATIVE: ${UNIVERSAL_NEGATIVE_PROMPT}`;
+    return `[${mode}] ${grounding}${modePrefix} ${base} — brand: ${brandName}, product: ${productName}. NEGATIVE: ${UNIVERSAL_NEGATIVE_PROMPT}`;
   });
 }
+
 
 const MODE_PREFIX: Record<ImageMode, string> = {
   interface_ui: "Stylized product UI panel, cropped, ghosted layers,",
