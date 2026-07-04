@@ -150,40 +150,11 @@ export function pickImageModeForSection(
   return isSaaS ? "abstract_brand_texture" : "iconographic_brand_visual";
 }
 
-// -------------------- Preview image URL --------------------
-// We use Pollinations.ai as a free text-to-image service so the "preview"
-// visuals actually reflect the section's imagePrompt/negativePrompt instead
-// of unrelated stock scenery.
+// Image generation is handled server-side via /api/generate-images, which
+// calls the Lovable AI Gateway (Gemini image model) and stores results in
+// Lovable Cloud storage. No client-side URL builder is needed.
 
-function hashStr(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
 
-/**
- * Build a Pollinations.ai preview URL from a section's image prompt.
- * - Prompt and negative prompt are combined into one descriptive string.
- * - Seed is derived from sectionId so the same section always resolves to the
- *   same image on reload. Pass `regenSeed` (e.g. a nonce from a "regenerate"
- *   action) to force a different image while keeping determinism per attempt.
- */
-export function pollinationsUrl(
-  imagePrompt: string,
-  negativePrompt?: string,
-  sectionId: string = "section",
-  regenSeed?: string,
-): string {
-  const positive = (imagePrompt || "").trim();
-  const negative = (negativePrompt || "").trim();
-  const combined = negative
-    ? `${positive}. AVOID: ${negative}`
-    : positive || "abstract brand texture";
-  const seedInput = regenSeed ? `${sectionId}|${regenSeed}` : sectionId;
-  const seed = hashStr(seedInput) % 1_000_000;
-  const encoded = encodeURIComponent(combined);
-  return `https://pollinations.ai/p/${encoded}?width=1200&height=800&seed=${seed}&nologo=true`;
-}
 
 /**
  * Grounding prefix used on every image prompt when we have a description of
