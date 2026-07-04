@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { previewUrlFor } from "@/lib/ai/prompts";
+import { pollinationsUrl } from "@/lib/ai/prompts";
 import type { GeneratedImagePreview, ImageMode, ProjectCategory } from "@/types";
 
 interface Body {
@@ -11,6 +11,10 @@ interface Body {
     imagePrompt: string;
     imageStyle?: string;
     imageMode?: ImageMode;
+    negativePrompt?: string;
+    /** Optional nonce so a "regenerate images" action produces a different
+     *  seed while still being deterministic within the attempt. */
+    seedNonce?: string;
   }[];
 }
 
@@ -80,13 +84,18 @@ export const Route = createFileRoute("/api/generate-images")({
               placeholderLabel: LABEL_BY_MODE[mode] ?? "Image placeholder",
             };
           }
-          const seedKey = `${body.projectName}|${body.conceptName}|${item.sectionId}|${mode}|${item.imagePrompt}`;
+          const url = pollinationsUrl(
+            item.imagePrompt,
+            item.negativePrompt,
+            item.sectionId,
+            item.seedNonce,
+          );
           return {
             sectionId: item.sectionId,
             imagePrompt: item.imagePrompt,
             imageStyle: item.imageStyle ?? "",
-            previewUrl: previewUrlFor(mode, seedKey),
-            status: "simulated",
+            previewUrl: url,
+            status: "generated",
             imageMode: mode,
             category: body.category,
           };
