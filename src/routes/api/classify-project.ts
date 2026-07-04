@@ -1,11 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { callLLMJson } from "@/lib/ai/gateway";
+import { resolveThemePalette } from "@/lib/theme/palette";
 import type { ProjectClassification } from "@/types";
 
 interface Body {
   workspace: { name: string; brandDescription: string; primaryAudience: string };
   product: { name: string; shortDescription: string; keyFeatures: string; keyBenefits: string };
   project?: { goal?: string; tone?: string; notes?: string };
+  /** Optional dominant color list (typically from product_visual_profiles.visibleColors)
+   *  used to derive an on-brand themePalette. Falls back to category defaults. */
+  visibleColors?: string[];
 }
 
 const SCHEMA = {
@@ -52,13 +56,20 @@ export async function classifyProject(body: Body): Promise<ProjectClassification
   ]
     .filter(Boolean)
     .join("\n");
-  return callLLMJson<ProjectClassification>(prompt, {
+  const cls = await callLLMJson<ProjectClassification>(prompt, {
     system:
       "You are a category classifier for landing-page strategy. Return ONLY valid JSON matching the requested schema. Choose the single best category — if it's software choose b2b_saas or finance_software, if it's a physical consumable choose dtc_physical_product / beauty_skincare / food_beverage, etc.",
     temperature: 0.2,
     responseSchema: SCHEMA,
     schemaName: "ProjectClassification",
   });
+  // Attach a brand theme palette. Prefer product-photo colors when supplied,
+  // otherwise fall back to a category-tuned default.
+  const themePalette = resolveThemePalette({
+    category: cls.category,
+    visibleColors: body.visibleColors,
+  });
+  return { ...cls, themePalette };
 }
 
 export const Route = createFileRoute("/api/classify-project")({

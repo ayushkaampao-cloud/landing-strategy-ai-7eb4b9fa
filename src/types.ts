@@ -128,12 +128,23 @@ export type AwarenessLevel =
   | "product_aware"
   | "most_aware";
 
+export interface ThemePalette {
+  primary: string;
+  accent: string;
+  background: string;
+  surface: string;
+  text: string;
+  mutedText: string;
+  source: "product_photos" | "category_default";
+}
+
 export interface ProjectClassification {
   category: ProjectCategory;
   subcategory: string;
   audienceSophistication: AudienceSophistication;
   awarenessLevel: AwarenessLevel;
   toneSummary: string;
+  themePalette?: ThemePalette;
 }
 
 export type ImageMode =
