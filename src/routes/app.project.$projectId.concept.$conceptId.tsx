@@ -437,7 +437,7 @@ function ConceptDetail() {
                                   ? "Generation failed — using placeholder"
                                   : img.status === "placeholder"
                                     ? `Placeholder · ${img.imageMode ?? "image"}`
-                                    : "Preview image · Simulated"}
+                                    : "Preview image · Generated"}
                             </span>
                             <div className="flex items-center gap-2">
                               {img.status !== "real" && (
