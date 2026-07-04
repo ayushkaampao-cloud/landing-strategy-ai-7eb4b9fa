@@ -73,11 +73,23 @@ interface StoreContextValue extends AppData {
   createProduct: (input: Omit<Product, "id" | "createdAt">) => Product;
   createProject: (input: Omit<Project, "id" | "createdAt">) => Project;
   saveConcepts: (projectId: string, concepts: LandingPageConcept[]) => void;
+  saveConceptsAsync: (
+    projectId: string,
+    concepts: LandingPageConcept[],
+  ) => Promise<void>;
   updateConceptSection: (
     conceptId: string,
     sectionId: string,
     patch: Partial<import("@/types").SectionProps>,
   ) => void;
+  updateSectionBullets: (
+    conceptId: string,
+    sectionId: string,
+    bullets: string[],
+  ) => void;
+  isFieldEdited: (conceptId: string, path: string) => boolean;
+  getEditedFields: (conceptId: string) => Record<string, boolean>;
+  getFieldSaveError: (conceptId: string, path: string) => string | undefined;
   deleteProject: (projectId: string) => void;
   deleteWorkspace: (workspaceId: string) => void;
   activeWorkspace: Workspace | null;
