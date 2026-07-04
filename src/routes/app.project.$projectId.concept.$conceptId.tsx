@@ -225,7 +225,7 @@ function ConceptDetail() {
         negativePrompt: concept?.schema.sections.find((s) => s.id === sectionId)?.negativePrompt,
         imageMode: img.imageMode,
         visualProfile,
-        referenceImages: productImages,
+        referenceImages: referenceImagesForReal,
       });
       const next = images.map((i) =>
         i.sectionId === sectionId ? { ...i, realUrl: url, status: "real" as const } : i,
