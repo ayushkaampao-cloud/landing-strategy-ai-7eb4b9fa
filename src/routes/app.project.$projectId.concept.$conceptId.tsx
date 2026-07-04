@@ -383,13 +383,41 @@ function ConceptDetail() {
                                 </div>
                               </div>
                             </div>
+                          ) : imgFailed[s.id] ? (
+                            <div className="aspect-[16/9] bg-neutral-200 dark:bg-neutral-800 grid place-items-center">
+                              <div className="text-center px-6">
+                                <div className="text-sm font-medium mb-1 text-muted-foreground">
+                                  Image didn't load
+                                </div>
+                                <div className="text-[11px] text-muted-foreground mb-3 max-w-xs mx-auto">
+                                  The preview host may be busy. Try again in a moment.
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setImgFailed((m) => ({ ...m, [s.id]: false }));
+                                    setImgRetry((m) => ({ ...m, [s.id]: (m[s.id] ?? 0) + 1 }));
+                                  }}
+                                  className="mono-tag px-3 py-1 rounded bg-ink text-background hover:opacity-90"
+                                >
+                                  Retry
+                                </button>
+                              </div>
+                            </div>
                           ) : (
                             <div className="relative">
                               <img
-                                src={img.realUrl ?? img.previewUrl}
+                                key={`${img.realUrl ?? img.previewUrl}#${imgRetry[s.id] ?? 0}`}
+                                src={
+                                  (img.realUrl ?? img.previewUrl) +
+                                  (imgRetry[s.id]
+                                    ? (img.previewUrl.includes("?") ? "&" : "?") + `_r=${imgRetry[s.id]}`
+                                    : "")
+                                }
                                 alt="Section preview"
                                 className={`w-full h-auto block ${realGenerating[s.id] ? "opacity-60" : ""}`}
                                 loading="lazy"
+                                onError={() => setImgFailed((m) => ({ ...m, [s.id]: true }))}
                               />
                               {realGenerating[s.id] && (
                                 <div className="absolute inset-0 grid place-items-center bg-background/40">
@@ -400,6 +428,7 @@ function ConceptDetail() {
                               )}
                             </div>
                           )}
+
                           <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground gap-2">
                             <span className="mono-tag">
                               {img.status === "real"
