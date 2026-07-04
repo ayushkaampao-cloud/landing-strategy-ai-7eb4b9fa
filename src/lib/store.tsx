@@ -739,7 +739,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (existingId) {
       await supabase
         .from("elements")
-        .update({ body_copy: JSON.stringify(e), is_edited: true })
+        .update({ body_copy: JSON.stringify(e) })
         .eq("id", existingId);
       return existingId;
     } else {
