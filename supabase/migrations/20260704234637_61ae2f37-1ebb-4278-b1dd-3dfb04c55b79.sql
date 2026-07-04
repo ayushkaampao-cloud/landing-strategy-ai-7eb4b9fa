@@ -1,0 +1,1 @@
+ALTER TABLE public.elements ADD COLUMN IF NOT EXISTS edited_fields jsonb NOT NULL DEFAULT '{}'::jsonb;

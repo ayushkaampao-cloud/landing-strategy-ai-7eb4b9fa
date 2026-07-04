@@ -83,6 +83,7 @@ export type Database = {
           concept_id: string
           created_at: string
           cta_label: string | null
+          edited_fields: Json
           headline: string | null
           id: string
           image_mode: string | null
@@ -98,6 +99,7 @@ export type Database = {
           concept_id: string
           created_at?: string
           cta_label?: string | null
+          edited_fields?: Json
           headline?: string | null
           id?: string
           image_mode?: string | null
@@ -113,6 +115,7 @@ export type Database = {
           concept_id?: string
           created_at?: string
           cta_label?: string | null
+          edited_fields?: Json
           headline?: string | null
           id?: string
           image_mode?: string | null
