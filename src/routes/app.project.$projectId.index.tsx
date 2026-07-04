@@ -129,7 +129,7 @@ function ProjectGallery() {
         )}
 
         <div className="mb-8">
-          <VisualProfileSummary profile={visualProfile} imageCount={productImages.length} />
+          <VisualProfileSummary profile={visualProfile} imageCount={productImageCount} />
         </div>
 
 
