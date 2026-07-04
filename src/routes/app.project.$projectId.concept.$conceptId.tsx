@@ -415,6 +415,18 @@ function ConceptDetail() {
                       onEdit={(field, value) =>
                         updateConceptSection(concept.id, s.id, { [field]: value } as Partial<SectionProps>)
                       }
+                      onEditBullets={(bullets) =>
+                        updateSectionBullets(concept.id, s.id, bullets)
+                      }
+                      onEditItems={(items) =>
+                        updateConceptSection(concept.id, s.id, { items } as Partial<SectionProps>)
+                      }
+                      isEdited={(path) =>
+                        isFieldEdited(concept.id, `sections.${s.id}.${path}`)
+                      }
+                      saveError={(path) =>
+                        getFieldSaveError(concept.id, `sections.${s.id}.${path}`)
+                      }
                     />
                     {img && (
                       <div className="px-10 pb-10 -mt-6">
