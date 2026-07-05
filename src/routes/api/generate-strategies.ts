@@ -198,8 +198,8 @@ export const Route = createFileRoute("/api/generate-strategies")({
         } catch (err) {
           console.error("[strategies] error:", err);
           return Response.json(
-            { error: (err as Error).message || "Strategy generation failed" },
-            { status: 500 },
+            { error: "Content generation is temporarily unavailable — please try again in a moment." },
+            { status: 503 },
           );
         }
       },

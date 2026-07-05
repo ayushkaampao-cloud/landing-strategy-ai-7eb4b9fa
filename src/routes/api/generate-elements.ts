@@ -208,8 +208,8 @@ export const Route = createFileRoute("/api/generate-elements")({
         } catch (err) {
           console.error("[elements] error:", err);
           return Response.json(
-            { error: (err as Error).message || "Element generation failed" },
-            { status: 500 },
+            { error: "Content generation is temporarily unavailable — please try again in a moment." },
+            { status: 503 },
           );
         }
       },

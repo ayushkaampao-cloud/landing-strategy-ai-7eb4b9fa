@@ -131,7 +131,7 @@ function Generating() {
       }, 600);
     } catch (err) {
       console.error(err);
-      setError((err as Error).message || "Something went wrong");
+      setError("Content generation is temporarily unavailable — please try again in a moment.");
       // Last-resort fallback so the user gets something
       const concepts = generateConceptsForProject(workspace, product, project);
       saveConcepts(project.id, concepts);

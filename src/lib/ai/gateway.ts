@@ -8,7 +8,9 @@ const GEMINI_DIRECT_MODEL = "gemini-2.5-flash";
 const GEMINI_DIRECT_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_DIRECT_MODEL}:generateContent`;
 
 const LOVABLE_MODEL = "google/gemini-3-flash-preview";
-const OPENROUTER_MODEL = "google/gemini-2.5-flash";
+// Free-tier OpenRouter model with native structured output + large context.
+// Verified present in OpenRouter's /api/v1/models catalog.
+const OPENROUTER_MODEL = "nvidia/nemotron-nano-9b-v2:free";
 
 export interface LLMOptions {
   system?: string;
@@ -120,6 +122,8 @@ async function callOpenRouter(prompt: string, opts: LLMOptions): Promise<string>
         { role: "user", content: prompt },
       ],
       temperature: opts.temperature ?? 0.8,
+      // OpenRouter free tier caps affordable output at ~16k tokens; keep well below.
+      max_tokens: Math.min(opts.maxTokens ?? 8000, 16000),
       ...(opts.responseSchema
         ? {
             response_format: {
@@ -181,7 +185,9 @@ async function runChain(
       errors.push(`${attempt.name}: ${reason}`);
     }
   }
-  throw new Error(`All LLM providers failed. ${errors.join(" | ")}`);
+  const detail = `All LLM providers failed. ${errors.join(" | ")}`;
+  console.error("[llm]", detail);
+  throw new Error(detail);
 }
 
 export async function callLLM(prompt: string, opts: LLMOptions = {}): Promise<string> {

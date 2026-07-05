@@ -237,7 +237,11 @@ function ConceptDetail() {
             onlyFamily: concept.templateFamily,
           }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          const detail = await res.text().catch(() => "");
+          console.error("[strategies] api error:", res.status, detail);
+          throw new Error("provider_unavailable");
+        }
         const data = (await res.json()) as { concepts: LandingPageConcept[] };
         const fresh = data.concepts[0];
         if (!fresh) throw new Error("No concept returned");
@@ -266,7 +270,7 @@ function ConceptDetail() {
     } catch (err) {
       console.error("[regenerate] error:", err);
       toast.error(
-        `Regeneration failed: ${(err as Error).message}. Your current concept is unchanged.`,
+        "Content generation is temporarily unavailable — please try again in a moment. Your current concept is unchanged.",
       );
       // Ensure the previous concept is still visible; no navigation happens.
       void previousConcept;
@@ -386,7 +390,11 @@ function ConceptDetail() {
         }),
       });
       clearInterval(stepTimer);
-      if (!res.ok) throw new Error((await res.text()) || "Element generation failed");
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        console.error("[elements] api error:", res.status, detail);
+        throw new Error("Content generation is temporarily unavailable — please try again in a moment.");
+      }
       const data = (await res.json()) as LandingPageElements;
 
       saveElements(conceptId, data);
