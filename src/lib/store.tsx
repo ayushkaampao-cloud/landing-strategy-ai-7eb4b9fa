@@ -107,6 +107,8 @@ interface StoreContextValue extends AppData {
   getFieldSaveError: (conceptId: string, path: string) => string | undefined;
   deleteProject: (projectId: string) => Promise<void>;
   deleteWorkspace: (workspaceId: string) => Promise<void>;
+  enableConceptShare: (conceptId: string) => Promise<string>;
+  disableConceptShare: (conceptId: string) => Promise<void>;
   activeWorkspace: Workspace | null;
   getResearch: (projectId: string) => ProjectResearch | null;
   saveResearch: (projectId: string, r: ProjectResearch) => void;
@@ -253,6 +255,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         id: r.id,
         projectId: r.project_id,
         createdAt: r.created_at,
+        shareToken: (r.share_token as string | null) ?? null,
       }));
       conceptIds = concepts.map((c) => c.id);
     }
@@ -835,6 +838,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const enableConceptShare = useCallback(async (conceptId: string): Promise<string> => {
+    const existing = dataRef.current.concepts.find((c) => c.id === conceptId);
+    if (existing?.shareToken) return existing.shareToken;
+    const token =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : uid();
+    if (dataRef.current.user) {
+      const { error } = await supabase
+        .from("concepts")
+        .update({ share_token: token })
+        .eq("id", conceptId);
+      if (error) throw error;
+    }
+    setData((d) => ({
+      ...d,
+      concepts: d.concepts.map((c) =>
+        c.id === conceptId ? { ...c, shareToken: token } : c,
+      ),
+    }));
+    return token;
+  }, []);
+
+  const disableConceptShare = useCallback(async (conceptId: string): Promise<void> => {
+    if (dataRef.current.user) {
+      const { error } = await supabase
+        .from("concepts")
+        .update({ share_token: null })
+        .eq("id", conceptId);
+      if (error) throw error;
+    }
+    setData((d) => ({
+      ...d,
+      concepts: d.concepts.map((c) =>
+        c.id === conceptId ? { ...c, shareToken: null } : c,
+      ),
+    }));
+  }, []);
+
   const activeWorkspace = useMemo(
     () => data.workspaces.find((w) => w.id === data.activeWorkspaceId) ?? null,
     [data.workspaces, data.activeWorkspaceId],
@@ -1068,6 +1110,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       data.elementSaveErrors[conceptId]?.[path],
     deleteProject,
     deleteWorkspace,
+    enableConceptShare,
+    disableConceptShare,
     version,
     legacyImportPending,
     importLegacyData,

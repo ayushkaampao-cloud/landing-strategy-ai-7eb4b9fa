@@ -227,6 +227,7 @@ export interface LandingPageConcept {
   schema: LandingPageSchema;
   researchSnapshot?: string;
   createdAt: string;
+  shareToken?: string | null;
 }
 
 export interface LandingPageElementsHero {

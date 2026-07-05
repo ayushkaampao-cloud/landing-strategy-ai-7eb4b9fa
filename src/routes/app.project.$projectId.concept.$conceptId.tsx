@@ -11,6 +11,16 @@ import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, ProductImageRef, SectionProps } from "@/types";
 import { resolveThemePalette } from "@/lib/theme/palette";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
   component: ConceptDetail,
@@ -37,6 +47,8 @@ function ConceptDetail() {
     getProductImageCount,
     getVisualProfile,
     setActiveWorkspace,
+    enableConceptShare,
+    disableConceptShare,
   } = useStore();
   // All hooks are declared unconditionally at the top of the component to
   // keep hook order stable across renders. A prior version declared
@@ -57,6 +69,8 @@ function ConceptDetail() {
   const [imgFailed, setImgFailed] = useState<Record<string, boolean>>({});
   const [imgRetry, setImgRetry] = useState<Record<string, number>>({});
   const [regenerating, setRegenerating] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [disableShareOpen, setDisableShareOpen] = useState(false);
   const regeneratingRef = useRef(false);
 
   const project = projects.find((p) => p.id === projectId);
@@ -118,6 +132,54 @@ function ConceptDetail() {
       /* noop */
     }
   };
+
+  const shareUrl = (token: string) =>
+    `${typeof window !== "undefined" ? window.location.origin : ""}/preview/${token}`;
+
+  const handleSharePreview = async () => {
+    if (!concept || shareBusy) return;
+    setShareBusy(true);
+    try {
+      const token = await enableConceptShare(concept.id);
+      try {
+        await navigator.clipboard.writeText(shareUrl(token));
+        toast.success("Share link copied");
+      } catch {
+        toast.success("Share preview enabled");
+      }
+    } catch (err) {
+      toast.error("Couldn't enable share link");
+      console.error("[share] enable", err);
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    if (!concept?.shareToken) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl(concept.shareToken));
+      toast.success("Link copied");
+    } catch {
+      toast.error("Couldn't copy link");
+    }
+  };
+
+  const handleDisableShare = async () => {
+    if (!concept) return;
+    setShareBusy(true);
+    try {
+      await disableConceptShare(concept.id);
+      toast.success("Share link disabled");
+      setDisableShareOpen(false);
+    } catch (err) {
+      toast.error("Couldn't disable share link");
+      console.error("[share] disable", err);
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
 
   const regenerate = async () => {
     if (!workspace || !product || !project || !concept) return;
@@ -723,9 +785,64 @@ function ConceptDetail() {
                 {regenerating ? "Regenerating…" : "↻ Regenerate this concept"}
               </button>
             </div>
+
+            <div className="space-y-2 pt-4 border-t border-border mt-4">
+              <div className="mono-tag text-muted-foreground mb-1">Share</div>
+              {!concept.shareToken ? (
+                <button
+                  onClick={handleSharePreview}
+                  disabled={shareBusy}
+                  className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted disabled:opacity-60"
+                >
+                  {shareBusy ? "Creating link…" : "Share preview"}
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={handleCopyShareLink}
+                    className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted"
+                  >
+                    Copy link
+                  </button>
+                  <button
+                    onClick={() => setDisableShareOpen(true)}
+                    disabled={shareBusy}
+                    className="w-full h-9 text-[12px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-60"
+                  >
+                    Disable link
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </aside>
       </div>
+      <AlertDialog
+        open={disableShareOpen}
+        onOpenChange={(v) => !shareBusy && setDisableShareOpen(v)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable share link?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The public preview will stop working. You can create a new link
+              later, but it will have a different URL.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={shareBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDisableShare();
+              }}
+              disabled={shareBusy}
+            >
+              {shareBusy ? "Disabling…" : "Disable link"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
