@@ -391,11 +391,19 @@ function ConceptDetail() {
       <TopBar>
         <GroundingBadge count={productImageCount} hasProfile={!!visualProfile} />
         <Link
+          to="/app/projects"
+          onClick={() => workspace && setActiveWorkspace(workspace.id)}
+          className="mono-tag text-muted-foreground hover:text-foreground"
+        >
+          {workspace?.name ?? "Brand"}
+        </Link>
+        <span className="mono-tag text-muted-foreground">/</span>
+        <Link
           to="/app/project/$projectId"
           params={{ projectId }}
           className="mono-tag text-muted-foreground hover:text-foreground"
         >
-          ← All 5 concepts
+          ← {project.projectName}
         </Link>
       </TopBar>
       <div className="grid grid-cols-12 min-h-[calc(100vh-56px)]">
