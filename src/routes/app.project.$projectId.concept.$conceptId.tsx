@@ -81,6 +81,39 @@ function ConceptDetail() {
   const workspace = workspaces.find((w) => w.id === project?.workspaceId);
   const concept = concepts.find((c) => c.id === conceptId);
 
+  // IMPORTANT: All hooks below must run on every render regardless of whether
+  // `concept` exists. Declaring hooks after an early return causes React to
+  // throw "Rendered fewer hooks than expected" when concept briefly disappears
+  // during regenerate/refresh — which cascades into the app error boundary
+  // and surfaces as a blank "Concept not found" screen.
+  const research = getResearch(projectId);
+  const elements = useMemo(
+    () => (concept ? getElements(conceptId) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conceptId, elementsVersion, concept?.id],
+  );
+  const images = useMemo(
+    () => (concept ? getImages(conceptId) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conceptId, imagesVersion, concept?.id],
+  );
+  const imageBySection = useMemo(() => {
+    const map: Record<string, GeneratedImagePreview> = {};
+    images.forEach((i) => (map[i.sectionId] = i));
+    return map;
+  }, [images]);
+  const productImageCount = getProductImageCount(projectId);
+  const visualProfile = getVisualProfile(projectId);
+  const theme = useMemo(() => {
+    const stored = research?.classification?.themePalette;
+    if (stored) return stored;
+    return resolveThemePalette({
+      category: research?.classification?.category,
+      visibleColors: visualProfile?.visibleColors,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [research?.classification?.themePalette, research?.classification?.category, visualProfile]);
+
   if (!project || !concept || !product || !workspace) {
     return (
       <>
@@ -285,37 +318,6 @@ function ConceptDetail() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const research = getResearch(projectId);
-  const elements = useMemo(
-    () => getElements(conceptId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [conceptId, elementsVersion],
-  );
-  const images = useMemo(
-    () => getImages(conceptId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [conceptId, imagesVersion],
-  );
-  const imageBySection = useMemo(() => {
-    const map: Record<string, GeneratedImagePreview> = {};
-    images.forEach((i) => (map[i.sectionId] = i));
-    return map;
-  }, [images]);
-
-  const productImageCount = getProductImageCount(projectId);
-  const visualProfile = getVisualProfile(projectId);
-  // Brand theme palette. Prefer the palette generated server-side in classify-project;
-  // fall back to a client-side derivation using the same category/color rules so old
-  // projects (or ones where classification hasn't stored a palette yet) still render on-brand.
-  const theme = useMemo(() => {
-    const stored = research?.classification?.themePalette;
-    if (stored) return stored;
-    return resolveThemePalette({
-      category: research?.classification?.category,
-      visibleColors: visualProfile?.visibleColors,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [research?.classification?.themePalette, research?.classification?.category, visualProfile]);
   // generateRealImage only checks referenceImages.length > 0 to inject grounding
   // text, so a single placeholder is enough after refresh when the count > 0.
   const referenceImagesForReal: ProductImageRef[] =
