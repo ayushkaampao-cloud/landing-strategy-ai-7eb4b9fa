@@ -849,7 +849,7 @@ function ConceptDetail() {
                   try {
                     const { skipped } = await downloadConceptZip({
                       concept,
-                      images,
+                      images: Object.values(displayImageBySection),
                       project,
                       workspace,
                       onProgress: (done, total) => setDlProgress({ done, total }),
