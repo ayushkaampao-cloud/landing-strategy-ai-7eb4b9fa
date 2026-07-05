@@ -85,12 +85,12 @@ function Generating() {
         body: JSON.stringify(researchPayload),
       });
       let research: ProjectResearch;
-      if (!rRes.ok) {
-        // Fallback synthetic research so the app never dead-ends
+      const rJson = rRes.ok ? ((await rRes.json()) as ProjectResearch & { fallback?: boolean }) : null;
+      if (!rRes.ok || rJson?.fallback) {
         research = fallbackResearch(project.sourceMode ?? "brief", product, workspace);
         setNote("Research fell back to brief-based inference (LLM unavailable).");
       } else {
-        research = (await rRes.json()) as ProjectResearch;
+        research = rJson as ProjectResearch;
         if (research.note) setNote(research.note);
       }
       saveResearch(project.id, research);
@@ -110,15 +110,14 @@ function Generating() {
       });
       setStep(4);
       let concepts: LandingPageConcept[];
-      if (!sRes.ok) {
+      const sJson = sRes.ok
+        ? ((await sRes.json()) as { concepts?: LandingPageConcept[]; fallback?: boolean })
+        : null;
+      if (!sRes.ok || sJson?.fallback || !sJson?.concepts || sJson.concepts.length === 0) {
         concepts = generateConceptsForProject(workspace, product, project);
         setNote((n) => n ?? "Strategies fell back to template generator (LLM unavailable).");
       } else {
-        const data = (await sRes.json()) as { concepts: LandingPageConcept[] };
-        concepts = data.concepts;
-        if (!concepts || concepts.length === 0) {
-          concepts = generateConceptsForProject(workspace, product, project);
-        }
+        concepts = sJson.concepts;
       }
       setStep(5);
       saveConcepts(project.id, concepts);

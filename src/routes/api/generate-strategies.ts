@@ -197,10 +197,12 @@ export const Route = createFileRoute("/api/generate-strategies")({
           return Response.json({ concepts: results });
         } catch (err) {
           console.error("[strategies] error:", err);
-          return Response.json(
-            { error: "Content generation is temporarily unavailable — please try again in a moment." },
-            { status: 503 },
-          );
+          // Return 200 with fallback flag so the client falls back to the
+          // template generator without triggering the app-level error reporter.
+          return Response.json({
+            fallback: true,
+            error: "Content generation is temporarily unavailable — please try again in a moment.",
+          });
         }
       },
     },
