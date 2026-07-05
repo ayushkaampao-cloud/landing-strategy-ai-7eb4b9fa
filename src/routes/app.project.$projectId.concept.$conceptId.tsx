@@ -72,6 +72,8 @@ function ConceptDetail() {
   const [regenerating, setRegenerating] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [disableShareOpen, setDisableShareOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [dlProgress, setDlProgress] = useState<{ done: number; total: number } | null>(null);
   const regeneratingRef = useRef(false);
 
   const project = projects.find((p) => p.id === projectId);
