@@ -1,67 +1,45 @@
 ## Goal
-Let a user share a read-only public preview of a single concept via an unguessable link, and revoke it.
+Add "Download everything" to the concept view's copy-actions column that packages every section image + a copy document into one zip.
 
-## 1. Database migration
+## 1. Dependency
 
-Add sharing to `concepts` and expose a token-gated read path.
+Add `jszip` (small, browser-safe, no native deps) via `bun add jszip`. Import as `import JSZip from "jszip"`.
 
-- `ALTER TABLE public.concepts ADD COLUMN share_token uuid UNIQUE` (nullable).
-- Create a `SECURITY DEFINER` function `public.get_shared_concept(_token uuid)` returning JSON with:
-  - the concept row (all display fields),
-  - the matching `elements` row (if any),
-  - the matching `image_previews` rows (without `source_image_urls`).
-  It looks up the concept by `share_token = _token AND share_token IS NOT NULL`, then joins children by `concept_id`. Returns `NULL` if no match. `SET search_path = public`.
-- `GRANT EXECUTE ON FUNCTION public.get_shared_concept(uuid) TO anon, authenticated`.
-- Do **not** add any anon SELECT policy on `concepts`, `elements`, or `image_previews`. All public access flows exclusively through this function, which cannot leak other rows (it filters by token in its own body).
+## 2. New helper: `src/lib/downloadConceptZip.ts`
 
-Rationale: token-scoped RLS with joins across three tables is fragile; a definer function with an explicit `WHERE share_token = _token` guarantees the public path can only ever return the one concept and its children.
+Pure client-side function `downloadConceptZip({ concept, images, project, workspace })` that:
 
-## 2. Store additions (`src/lib/store.tsx`)
+- **Filename**: slugify `${workspace.name}-${project.projectName}-${concept.conceptName}-page.zip` (lowercase, non-alphanum → `-`, collapse dashes). Example: `qorfit-pulse-performance-page.zip`.
+- **Copy document (`copy.md`)**: build markdown with:
+  - Title `# {concept.conceptName}`, framework line, one-line strategy.
+  - For each section in order: `## {NN}. {TYPE} — {title}` header, then highlight (`> …`), subtitle, body, bullets (`- …`), items (`- **title**: body`), and CTA (`**CTA:** …`). Same shape as the existing `fullText()` helper — reuse that logic.
+  - Trailing "Skipped images" list if any downloads failed.
+- **Images**: iterate sections in order; for each section with an image (checking `imageBySection` built the same way the view does — `realUrl || previewUrl`, skipping `placeholder`/`failed`/missing URLs), `fetch(url)` → `blob()`, name `NN-{sectionType-or-slug(title)}.{ext}` where `NN` is 2-digit index and `ext` derives from the blob's MIME (`image/png`→`png`, `image/jpeg`→`jpg`, `image/webp`→`webp`, fallback `png`). Wrap each fetch in try/catch; on failure push to a `skipped` array and keep going.
+- Zip via JSZip → `generateAsync({ type: "blob" })` → programmatic `<a download>` click, then revoke the object URL.
 
-- `enableConceptShare(conceptId): Promise<string>` — if the concept already has `share_token`, return it; else generate a UUID (`crypto.randomUUID()`), update the row in Supabase, update local `concepts[]`, return the token.
-- `disableConceptShare(conceptId): Promise<void>` — set `share_token = null` in DB, mirror in local state.
-- Extend `LandingPageConcept` type with optional `shareToken?: string | null` and map `share_token` in the initial load selector.
+Data URLs (some previews are base64) are handled by `fetch()` natively.
 
-## 3. Concept view UI (`src/routes/app.project.$projectId.concept.$conceptId.tsx`)
+## 3. UI change: `src/routes/app.project.$projectId.concept.$conceptId.tsx`
 
-Add a small share control cluster in the concept header (near existing action buttons):
+In the "Copy actions" block, add a fourth button *after* "Copy full page content" and *before* "↻ Regenerate this concept":
 
-- If `concept.shareToken` is null: **"Share preview"** button → calls `enableConceptShare`, then copies `${window.location.origin}/preview/{token}` to clipboard, toast `"Share link copied"`.
-- If already shared: show **"Copy link"** and **"Disable link"** buttons.
-  - Copy link → clipboard + toast `"Link copied"`.
-  - Disable link → `ConfirmDeleteDialog`-style confirmation ("Disable this share link? The public preview will stop working."), then `disableConceptShare`, toast `"Share link disabled"`.
+```
+[Download everything]         // idle
+[Packaging {n}/{total}…]      // loading
+```
 
-No other UI changes; owner view stays fully editable.
+- Local state: `downloading: boolean`, `dlProgress: {done, total} | null` updated by an optional `onProgress` callback in the helper.
+- On click → `setDownloading(true)`; await helper; toast `"Downloaded"` or `"Some images couldn't be included"` if `skipped.length > 0`; toast `"Download failed"` on outright error; `finally setDownloading(false)`.
+- Button disabled while downloading.
 
-## 4. Public preview route (`src/routes/preview.$shareToken.tsx`)
+No changes to server code, DB, or existing copy/share flows.
 
-New top-level public route (SSR on, no auth gate, not under `_authenticated`).
+## 4. Non-goals
 
-- Uses a **public server function** `getSharedConcept({ token })` that:
-  - Builds a Supabase publishable-key client inline (per `tanstack-supabase-integration`).
-  - Calls `supabase.rpc("get_shared_concept", { _token: token })`.
-  - Returns `{ concept, elements, images } | null`.
-  - No `requireSupabaseAuth`, no `supabaseAdmin`.
-- Loader calls the server fn via `ensureQueryData`; component uses `useSuspenseQuery`.
-- If result is `null` → render a clean centered page: **"This preview is no longer available."** (200, not an error). Also set `head()` `robots: noindex, nofollow` and a generic title.
-- If result exists → reuse `SectionRenderer` + palette resolution from the current concept view to render sections, hero, elements, and image previews in **read-only** mode. No edit toolbar, no regeneration buttons, no "back to project" link, no brand/project names beyond what the concept itself contains (`concept.conceptName`). Add a tiny "Made with …" footer only if trivial; otherwise omit.
-- `head()` sets `title = concept.conceptName`, description from `oneLineStrategy`, `robots: noindex` (share links shouldn't be indexed), and og:title/description mirrored.
-
-## 5. Security invariants
-
-- Anon role has **no** direct SELECT on `concepts`, `elements`, `image_previews`.
-- Only path for anonymous reads is `get_shared_concept(uuid)`, which returns exactly one concept + its own children or `NULL`.
-- Revoking = `share_token = NULL`; RPC then returns `NULL` and route shows the "no longer available" message.
-- Token is `uuid` (122 bits of entropy), `UNIQUE`.
-
-## Non-goals
-
-- No changes to generation logic, classification, or existing owner-only routes.
-- No listing of shared links elsewhere in the app.
-- No expiring tokens, no per-view analytics.
+- No zip for the shared preview route.
+- No including of the underlying `elements.json` or per-section metadata — plain readable markdown only.
+- No image regeneration if a section has no image; it's simply omitted from the zip (and listed under "Skipped images" only if a URL existed but the fetch failed, not if there was no image to begin with).
 
 ## Files touched
-
-- **New migration**: adds `share_token` column + `get_shared_concept` function + grants.
-- **New**: `src/routes/preview.$shareToken.tsx`, `src/lib/preview.functions.ts` (server fn).
-- **Edited**: `src/lib/store.tsx`, `src/routes/app.project.$projectId.concept.$conceptId.tsx`, `src/types.ts`.
+- **New**: `src/lib/downloadConceptZip.ts`
+- **Edited**: `src/routes/app.project.$projectId.concept.$conceptId.tsx`, `package.json` (+ lockfile) via `bun add jszip`.
