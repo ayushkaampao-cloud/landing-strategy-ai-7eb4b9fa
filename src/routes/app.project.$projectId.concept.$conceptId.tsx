@@ -124,13 +124,14 @@ function ConceptDetail() {
           sectionId: s.id,
           imagePrompt: "Uploaded product photo",
           imageStyle: "uploaded",
-          imageMode: "product_hero",
+          imageMode: "product_packshot",
           previewUrl: heroProductImage,
           realUrl: heroProductImage,
           status: "real",
-        } as GeneratedImagePreview;
+        };
       }
     });
+
     return map;
   }, [concept, imageBySection, heroProductImage]);
 
