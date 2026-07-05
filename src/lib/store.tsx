@@ -494,6 +494,106 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return p;
   }, []);
 
+  const updateProjectBrief = useCallback<StoreContextValue["updateProjectBrief"]>(
+    async (projectId, patch) => {
+      let prevProject: Project | undefined;
+      let prevProduct: Product | undefined;
+      setData((d) => {
+        prevProject = d.projects.find((p) => p.id === projectId);
+        prevProduct = d.products.find((p) => p.id === projectId);
+        if (!prevProject) return d;
+        const nextProject: Project = {
+          ...prevProject,
+          goal: patch.goal ?? prevProject.goal,
+          tone: patch.tone ?? prevProject.tone,
+          notes: patch.notes ?? prevProject.notes,
+        };
+        const nextProduct: Product | undefined = prevProduct
+          ? {
+              ...prevProduct,
+              shortDescription:
+                patch.productDescription ?? prevProduct.shortDescription,
+              keyFeatures: patch.keyFeatures ?? prevProduct.keyFeatures,
+              keyBenefits: patch.keyBenefits ?? prevProduct.keyBenefits,
+            }
+          : undefined;
+        return {
+          ...d,
+          projects: d.projects.map((p) => (p.id === projectId ? nextProject : p)),
+          products: nextProduct
+            ? d.products.map((p) => (p.id === projectId ? nextProduct : p))
+            : d.products,
+        };
+      });
+      bump();
+      if (dataRef.current.user) {
+        const dbPatch: Record<string, any> = {};
+        if (patch.productDescription !== undefined)
+          dbPatch.product_description = patch.productDescription;
+        if (patch.keyFeatures !== undefined) dbPatch.key_features = patch.keyFeatures;
+        if (patch.keyBenefits !== undefined) dbPatch.key_benefits = patch.keyBenefits;
+        if (patch.goal !== undefined) dbPatch.goal = patch.goal;
+        if (patch.tone !== undefined) dbPatch.tone = patch.tone;
+        if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+        const { error } = await supabase
+          .from("projects")
+          .update(dbPatch)
+          .eq("id", projectId);
+        if (error) {
+          // revert
+          setData((d) => ({
+            ...d,
+            projects: prevProject
+              ? d.projects.map((p) => (p.id === projectId ? prevProject! : p))
+              : d.projects,
+            products: prevProduct
+              ? d.products.map((p) => (p.id === projectId ? prevProduct! : p))
+              : d.products,
+          }));
+          bump();
+          throw error;
+        }
+      }
+    },
+    [bump],
+  );
+
+  const updateWorkspaceDescription = useCallback<
+    StoreContextValue["updateWorkspaceDescription"]
+  >(
+    async (workspaceId, description) => {
+      let prev: Workspace | undefined;
+      setData((d) => {
+        prev = d.workspaces.find((w) => w.id === workspaceId);
+        return {
+          ...d,
+          workspaces: d.workspaces.map((w) =>
+            w.id === workspaceId ? { ...w, brandDescription: description } : w,
+          ),
+        };
+      });
+      bump();
+      if (dataRef.current.user) {
+        const { error } = await supabase
+          .from("brands")
+          .update({ description })
+          .eq("id", workspaceId);
+        if (error) {
+          setData((d) => ({
+            ...d,
+            workspaces: prev
+              ? d.workspaces.map((w) => (w.id === workspaceId ? prev! : w))
+              : d.workspaces,
+          }));
+          bump();
+          throw error;
+        }
+      }
+    },
+    [bump],
+  );
+
+
   const createProject = useCallback<StoreContextValue["createProject"]>((input) => {
     const id = uid();
     const p: Project = {
