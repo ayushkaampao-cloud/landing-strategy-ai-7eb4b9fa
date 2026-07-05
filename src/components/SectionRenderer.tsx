@@ -293,7 +293,7 @@ function HeroSection({ ctx }: { ctx: SectionCtx }) {
   return (
     <section
       className="px-6 md:px-12 py-14 md:py-20"
-      style={{ background: theme.background, color: theme.text }}
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="grid md:grid-cols-2 gap-10 items-center max-w-6xl mx-auto">
         <div>
@@ -383,8 +383,8 @@ function ProblemSolutionSection({ ctx }: { ctx: SectionCtx }) {
   const { E } = useEditables(ctx);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="grid md:grid-cols-2 gap-10 items-center max-w-6xl mx-auto">
         <div>
@@ -423,8 +423,8 @@ function FeatureGridSection({ ctx }: { ctx: SectionCtx }) {
   const { E, renderItem } = useEditables(ctx);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="max-w-6xl mx-auto">
         {(s.title || ctx.onEdit) && (
@@ -528,8 +528,8 @@ function LifestyleSection({ ctx }: { ctx: SectionCtx }) {
   const { E } = useEditables(ctx);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
@@ -565,8 +565,8 @@ function ComparisonSection({ ctx }: { ctx: SectionCtx }) {
   const primaryText = contrastText(theme.primary);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="max-w-5xl mx-auto">
         {(s.title || ctx.onEdit) && (
@@ -686,8 +686,8 @@ function FaqSection({ ctx }: { ctx: SectionCtx }) {
   const { E, renderItem } = useEditables(ctx);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="max-w-3xl mx-auto">
         {(s.title || ctx.onEdit) && (
@@ -786,7 +786,7 @@ function GuaranteeSection({ ctx }: { ctx: SectionCtx }) {
   return (
     <section
       className="px-6 md:px-12 py-12"
-      style={{ background: theme.background, color: theme.text }}
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div
         className="max-w-3xl mx-auto flex items-start gap-5 p-6 rounded-xl"
@@ -832,8 +832,8 @@ function DetailsSection({ ctx }: { ctx: SectionCtx }) {
   const { E, renderBullets } = useEditables(ctx);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="grid md:grid-cols-2 gap-10 items-center max-w-6xl mx-auto">
         <div>
@@ -902,7 +902,7 @@ function GenericSection({ ctx }: { ctx: SectionCtx }) {
   return (
     <section
       className="px-6 md:px-12 py-14"
-      style={{ background: theme.background, color: theme.text }}
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="max-w-3xl mx-auto">
         <h2
