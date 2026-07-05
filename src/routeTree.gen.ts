@@ -32,6 +32,7 @@ import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as AppProjectProjectIdIndexRouteImport } from './routes/app.project.$projectId.index'
 import { Route as AppProjectProjectIdGeneratingRouteImport } from './routes/app.project.$projectId.generating'
+import { Route as AppProjectProjectIdEditRouteImport } from './routes/app.project.$projectId.edit'
 import { Route as AppProjectProjectIdConceptConceptIdRouteImport } from './routes/app.project.$projectId.concept.$conceptId'
 
 const McpRoute = McpRouteImport.update({
@@ -154,6 +155,11 @@ const AppProjectProjectIdGeneratingRoute =
     path: '/project/$projectId/generating',
     getParentRoute: () => AppRoute,
   } as any)
+const AppProjectProjectIdEditRoute = AppProjectProjectIdEditRouteImport.update({
+  id: '/project/$projectId/edit',
+  path: '/project/$projectId/edit',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppProjectProjectIdConceptConceptIdRoute =
   AppProjectProjectIdConceptConceptIdRouteImport.update({
     id: '/project/$projectId/concept/$conceptId',
@@ -183,6 +189,7 @@ export interface FileRoutesByFullPath {
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/app/brand/new': typeof AppBrandNewRoute
   '/app/product/new': typeof AppProductNewRoute
+  '/app/project/$projectId/edit': typeof AppProjectProjectIdEditRoute
   '/app/project/$projectId/generating': typeof AppProjectProjectIdGeneratingRoute
   '/app/project/$projectId/': typeof AppProjectProjectIdIndexRoute
   '/app/project/$projectId/concept/$conceptId': typeof AppProjectProjectIdConceptConceptIdRoute
@@ -208,6 +215,7 @@ export interface FileRoutesByTo {
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/app/brand/new': typeof AppBrandNewRoute
   '/app/product/new': typeof AppProductNewRoute
+  '/app/project/$projectId/edit': typeof AppProjectProjectIdEditRoute
   '/app/project/$projectId/generating': typeof AppProjectProjectIdGeneratingRoute
   '/app/project/$projectId': typeof AppProjectProjectIdIndexRoute
   '/app/project/$projectId/concept/$conceptId': typeof AppProjectProjectIdConceptConceptIdRoute
@@ -235,6 +243,7 @@ export interface FileRoutesById {
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/app/brand/new': typeof AppBrandNewRoute
   '/app/product/new': typeof AppProductNewRoute
+  '/app/project/$projectId/edit': typeof AppProjectProjectIdEditRoute
   '/app/project/$projectId/generating': typeof AppProjectProjectIdGeneratingRoute
   '/app/project/$projectId/': typeof AppProjectProjectIdIndexRoute
   '/app/project/$projectId/concept/$conceptId': typeof AppProjectProjectIdConceptConceptIdRoute
@@ -263,6 +272,7 @@ export interface FileRouteTypes {
     | '/.mcp/invoke-tool/$tool'
     | '/app/brand/new'
     | '/app/product/new'
+    | '/app/project/$projectId/edit'
     | '/app/project/$projectId/generating'
     | '/app/project/$projectId/'
     | '/app/project/$projectId/concept/$conceptId'
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/.mcp/invoke-tool/$tool'
     | '/app/brand/new'
     | '/app/product/new'
+    | '/app/project/$projectId/edit'
     | '/app/project/$projectId/generating'
     | '/app/project/$projectId'
     | '/app/project/$projectId/concept/$conceptId'
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/.mcp/invoke-tool/$tool'
     | '/app/brand/new'
     | '/app/product/new'
+    | '/app/project/$projectId/edit'
     | '/app/project/$projectId/generating'
     | '/app/project/$projectId/'
     | '/app/project/$projectId/concept/$conceptId'
@@ -500,6 +512,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectProjectIdGeneratingRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/project/$projectId/edit': {
+      id: '/app/project/$projectId/edit'
+      path: '/project/$projectId/edit'
+      fullPath: '/app/project/$projectId/edit'
+      preLoaderRoute: typeof AppProjectProjectIdEditRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/project/$projectId/concept/$conceptId': {
       id: '/app/project/$projectId/concept/$conceptId'
       path: '/project/$projectId/concept/$conceptId'
@@ -517,6 +536,7 @@ interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
   AppBrandNewRoute: typeof AppBrandNewRoute
   AppProductNewRoute: typeof AppProductNewRoute
+  AppProjectProjectIdEditRoute: typeof AppProjectProjectIdEditRoute
   AppProjectProjectIdGeneratingRoute: typeof AppProjectProjectIdGeneratingRoute
   AppProjectProjectIdIndexRoute: typeof AppProjectProjectIdIndexRoute
   AppProjectProjectIdConceptConceptIdRoute: typeof AppProjectProjectIdConceptConceptIdRoute
@@ -529,6 +549,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
   AppBrandNewRoute: AppBrandNewRoute,
   AppProductNewRoute: AppProductNewRoute,
+  AppProjectProjectIdEditRoute: AppProjectProjectIdEditRoute,
   AppProjectProjectIdGeneratingRoute: AppProjectProjectIdGeneratingRoute,
   AppProjectProjectIdIndexRoute: AppProjectProjectIdIndexRoute,
   AppProjectProjectIdConceptConceptIdRoute:
