@@ -116,6 +116,11 @@ interface StoreContextValue extends AppData {
   saveElements: (conceptId: string, e: LandingPageElements) => void;
   getImages: (conceptId: string) => GeneratedImagePreview[];
   saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => void;
+  updateImageForSection: (
+    conceptId: string,
+    sectionId: string,
+    patch: Partial<GeneratedImagePreview>,
+  ) => void;
   getProductImages: (projectId: string) => ProductImageRef[];
   loadProductImages: (projectId: string) => Promise<ProductImageRef[]>;
   saveProductImages: (projectId: string, imgs: ProductImageRef[]) => void;
