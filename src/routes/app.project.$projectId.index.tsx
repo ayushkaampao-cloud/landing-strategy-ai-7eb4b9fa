@@ -1,9 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, TEMPLATE_FAMILIES } from "@/lib/generator";
 import { VisualProfileSummary } from "@/components/VisualProfileSummary";
 import { GroundingBadge } from "@/components/GroundingBadge";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { useState } from "react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/project/$projectId/")({
   component: ProjectGallery,
@@ -11,9 +14,12 @@ export const Route = createFileRoute("/app/project/$projectId/")({
 
 function ProjectGallery() {
   const { projectId } = Route.useParams();
-  const { projects, products, concepts, getResearch, getProductImageCount, getVisualProfile } = useStore();
+  const navigate = useNavigate();
+  const { projects, products, concepts, workspaces, getResearch, getProductImageCount, getVisualProfile, deleteProject, setActiveWorkspace } = useStore();
   const project = projects.find((p) => p.id === projectId);
   const product = products.find((p) => p.id === project?.productId);
+  const workspace = workspaces.find((w) => w.id === project?.workspaceId);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const projectConcepts = concepts.filter((c) => c.projectId === projectId);
   const research = getResearch(projectId);
   const productImageCount = getProductImageCount(projectId);
@@ -35,18 +41,34 @@ function ProjectGallery() {
           <span className="mono-tag text-muted-foreground">{project.goal}</span>
         </TopBar>
         <div className="p-8 max-w-4xl">
+          <Link
+            to="/app/projects"
+            onClick={() => workspace && setActiveWorkspace(workspace.id)}
+            className="mono-tag text-muted-foreground hover:text-foreground inline-block mb-3"
+          >
+            ← {workspace?.name ?? "All projects"}
+          </Link>
           <div className="mono-tag text-muted-foreground mb-2">Project</div>
           <div className="flex items-start justify-between gap-4 mb-1">
             <h1 className="text-3xl font-semibold tracking-tight">
               {project.projectName}
             </h1>
-            <Link
-              to="/app/project/$projectId/edit"
-              params={{ projectId }}
-              className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface hover:border-foreground/30 shrink-0"
-            >
-              Edit project
-            </Link>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                to="/app/project/$projectId/edit"
+                params={{ projectId }}
+                className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface hover:border-foreground/30"
+              >
+                Edit project
+              </Link>
+              <button
+                type="button"
+                onClick={() => setDeleteOpen(true)}
+                className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface text-muted-foreground hover:text-destructive hover:border-destructive/40"
+              >
+                Delete project
+              </button>
+            </div>
           </div>
           <p className="text-muted-foreground text-sm mb-10">
             {product?.name} · {project.goal}
@@ -88,6 +110,23 @@ function ProjectGallery() {
             </Link>
           </div>
         </div>
+        <ConfirmDeleteDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          entity="project"
+          name={project.projectName}
+          onConfirm={async () => {
+            try {
+              if (workspace) setActiveWorkspace(workspace.id);
+              await deleteProject(projectId);
+              toast.success("Project deleted.");
+              navigate({ to: "/app/projects" });
+            } catch (err) {
+              toast.error("Failed to delete project: " + (err as Error).message);
+              throw err;
+            }
+          }}
+        />
       </>
     );
   }
@@ -106,18 +145,34 @@ function ProjectGallery() {
         <span className="mono-tag text-muted-foreground">{project.goal}</span>
       </TopBar>
       <div className="p-8 max-w-7xl">
+        <Link
+          to="/app/projects"
+          onClick={() => workspace && setActiveWorkspace(workspace.id)}
+          className="mono-tag text-muted-foreground hover:text-foreground inline-block mb-3"
+        >
+          ← {workspace?.name ?? "All projects"}
+        </Link>
         <div className="mb-2 mono-tag text-muted-foreground">Project</div>
         <div className="flex items-start justify-between gap-4 mb-1">
           <h1 className="text-3xl font-semibold tracking-tight">
             {project.projectName}
           </h1>
-          <Link
-            to="/app/project/$projectId/edit"
-            params={{ projectId }}
-            className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface hover:border-foreground/30 shrink-0"
-          >
-            Edit project
-          </Link>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              to="/app/project/$projectId/edit"
+              params={{ projectId }}
+              className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface hover:border-foreground/30"
+            >
+              Edit project
+            </Link>
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface text-muted-foreground hover:text-destructive hover:border-destructive/40"
+            >
+              Delete project
+            </button>
+          </div>
         </div>
         <p className="text-muted-foreground text-sm mb-8">
           {product?.name} · 5 strategic directions · {ordered.reduce((n, c) => n + c.schema.sections.length, 0)} sections total
@@ -238,6 +293,23 @@ function ProjectGallery() {
           })}
         </div>
       </div>
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        entity="project"
+        name={project.projectName}
+        onConfirm={async () => {
+          try {
+            if (workspace) setActiveWorkspace(workspace.id);
+            await deleteProject(projectId);
+            toast.success("Project deleted.");
+            navigate({ to: "/app/projects" });
+          } catch (err) {
+            toast.error("Failed to delete project: " + (err as Error).message);
+            throw err;
+          }
+        }}
+      />
     </>
   );
 }

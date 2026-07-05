@@ -1,9 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, TEMPLATE_FAMILIES } from "@/lib/generator";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useState } from "react";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 export const Route = createFileRoute("/app/projects")({
   component: ProjectsList,
@@ -11,25 +13,12 @@ export const Route = createFileRoute("/app/projects")({
 
 function ProjectsList() {
   const { projects, products, concepts, workspaces, activeWorkspace, setActiveWorkspace, deleteProject, deleteWorkspace } = useStore();
+  const navigate = useNavigate();
   const wsProjects = projects.filter((p) => p.workspaceId === activeWorkspace?.id);
   const otherWorkspaces = workspaces.filter((w) => w.id !== activeWorkspace?.id && projects.some((p) => p.workspaceId === w.id));
 
-  const onDeleteProject = (id: string, name: string) => {
-    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    deleteProject(id);
-    toast.success("Project deleted");
-  };
-  const onDeleteBrand = () => {
-    if (!activeWorkspace) return;
-    if (
-      !window.confirm(
-        `Delete brand "${activeWorkspace.name}" and all its projects? This cannot be undone.`,
-      )
-    )
-      return;
-    deleteWorkspace(activeWorkspace.id);
-    toast.success("Brand deleted");
-  };
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [brandDeleteOpen, setBrandDeleteOpen] = useState(false);
 
   return (
     <>
@@ -56,7 +45,7 @@ function ProjectsList() {
               </div>
               <button
                 type="button"
-                onClick={onDeleteBrand}
+                onClick={() => setBrandDeleteOpen(true)}
                 className="mono-tag text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
                 title="Delete brand and all its projects"
               >
@@ -144,7 +133,7 @@ function ProjectsList() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      onDeleteProject(p.id, p.projectName);
+                      setProjectToDelete({ id: p.id, name: p.projectName });
                     }}
                     className="absolute top-3 right-3 size-8 rounded-md grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
                     aria-label="Delete project"
@@ -181,6 +170,39 @@ function ProjectsList() {
           </div>
         )}
       </div>
+      <ConfirmDeleteDialog
+        open={!!projectToDelete}
+        onOpenChange={(v) => !v && setProjectToDelete(null)}
+        entity="project"
+        name={projectToDelete?.name ?? ""}
+        onConfirm={async () => {
+          if (!projectToDelete) return;
+          try {
+            await deleteProject(projectToDelete.id);
+            toast.success("Project deleted.");
+          } catch (err) {
+            toast.error("Failed to delete project: " + (err as Error).message);
+            throw err;
+          }
+        }}
+      />
+      <ConfirmDeleteDialog
+        open={brandDeleteOpen}
+        onOpenChange={setBrandDeleteOpen}
+        entity="brand"
+        name={activeWorkspace?.name ?? ""}
+        onConfirm={async () => {
+          if (!activeWorkspace) return;
+          try {
+            await deleteWorkspace(activeWorkspace.id);
+            toast.success("Brand deleted.");
+            navigate({ to: "/app" });
+          } catch (err) {
+            toast.error("Failed to delete brand: " + (err as Error).message);
+            throw err;
+          }
+        }}
+      />
     </>
   );
 }

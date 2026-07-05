@@ -1,62 +1,51 @@
-# Edit project screen
+# Delete flow + persistent back navigation
 
-New route `/app/project/$projectId/edit` that lets the user update the brief and manage product photos, without touching already-generated concepts, elements, or images.
+## 1. Store: async, error-surfacing deletes
 
-## Entry point
+`src/lib/store.tsx` — change `deleteProject` and `deleteWorkspace` to `Promise<void>`, awaiting the DB call BEFORE removing local state. On DB error, throw and leave in-memory state untouched so the row stays visible. Update the interface types accordingly.
 
-- Add an "Edit project" link/button to the project view (`src/routes/app.project.$projectId.index.tsx`) in the header area beside the project title. Uses the same `Link` styling as other secondary actions on that page.
+Cascades already handle child rows: `concepts → projects → brands`, `elements → concepts`, `image_previews → elements`, `product_visual_profiles → projects`. So a single `.delete()` on `projects` or `brands` is enough.
 
-## Fields (pre-filled)
+## 2. Confirmation dialog
 
-All editable in one form, pre-filled from the current `Project` / `Workspace` values:
+New tiny helper component `src/components/ConfirmDeleteDialog.tsx` wrapping shadcn `AlertDialog`:
 
-| Field | Backing column | Table |
-|---|---|---|
-| Brand description | `brands.description` | `brands` (workspace) |
-| Product description | `projects.product_description` | `projects` |
-| Key features | `projects.key_features` | `projects` |
-| Key benefits | `projects.key_benefits` | `projects` |
-| Goal | `projects.goal` (enum select) | `projects` |
-| Tone | `projects.tone` | `projects` |
-| Notes | `projects.notes` | `projects` |
+- Props: `open`, `onOpenChange`, `entity` ("brand" | "project"), `name`, `onConfirm: () => Promise<void>`.
+- Body text (exact): `Delete "{name}" and all its concepts, elements, and images? This can't be undone.`
+- "Cancel" (secondary) + "Delete" (destructive) buttons. Delete button shows loading spinner while `onConfirm` runs; if it throws, dialog stays open, `toast.error(...)` fires.
 
-On submit: single "Save changes" button. Writes go to `brands` (for brand description) and `projects` (for the rest) in parallel. Local store state is updated optimistically; toast on success / error. No auto-navigation — stay on the edit page so the user can also manage photos.
+## 3. Wire delete buttons
 
-## Product photos
+- **`src/routes/app.projects.tsx`** — replace both `window.confirm` calls (brand delete + per-project delete) with `<ConfirmDeleteDialog>` state. On success:
+  - Project delete → toast "Project deleted." (stay on page, list refreshes automatically).
+  - Brand delete → toast "Brand deleted." then `navigate({ to: "/app" })`.
 
-Second card on the same page:
-- Reuse `<ProductImageUploader>` (already handles add/remove/reorder) seeded with `getProductImages(projectId)`.
-- Local edit buffer; a "Save photos" button below the uploader commits changes. This keeps the analyze-images cost off every keystroke.
-- On save:
-  1. Persist via `saveProductImages(projectId, nextImages)` (already writes `product_visual_profiles.source_image_urls` + updates `productImageCount`).
-  2. If the set changed (compare by id list), POST `/api/analyze-product-images` with the new set, then call `saveVisualProfile(projectId, data.profile)`. Show a "Re-analyzing photos…" inline spinner during the call.
-  3. If the new set is empty, call `saveVisualProfile(projectId, null)` and skip the analyze fetch.
-- Never blocks the brief-fields form; the two save buttons are independent.
+- **`src/routes/app.project.$projectId.index.tsx`** — add a "Delete project" button in the header (next to "Edit project"). On confirm: delete, toast "Project deleted.", `navigate({ to: "/app/projects" })` (the brand's project list — this route already scopes to `activeWorkspace`, which is this project's workspace).
 
-## Store additions (`src/lib/store.tsx`)
+  To ensure the deleted project's workspace is the active one when we land, call `setActiveWorkspace(project.workspaceId)` before navigating.
 
-Two new helpers (no schema change — projects table already has all columns; brands already has description):
+## 4. Persistent back links (concept view = concept + elements)
 
-- `updateProjectBrief(projectId, patch: Partial<Pick<Project, 'goal' | 'tone' | 'notes' | ...>> & { productDescription?; keyFeatures?; keyBenefits? })` — updates local `projects` + `products` arrays and issues `supabase.from('projects').update({...}).eq('id', projectId)` mapping camelCase → snake_case columns.
-- `updateWorkspaceDescription(workspaceId, description)` — updates local `workspaces` and `supabase.from('brands').update({ description }).eq('id', workspaceId)`.
+Elements are rendered inside the concept route, so this covers both.
 
-Both are optimistic with error toast + revert on failure (best-effort — matches existing store patterns which fire-and-forget most writes).
+- **Concept route header** already has `← All 5 concepts` linked to `/app/project/$projectId` with `params={{ projectId }}` from `Route.useParams()`. Keep as-is but promote it to a first-class breadcrumb: two links rendered as `{brandName} / {projectName} / ← Back to project`, all using real IDs (`project.workspaceId`, `projectId`) and TanStack `<Link>` (not `history.back()`), so refresh and deep links work.
+  - `{brandName}` → `to="/app/projects"` with `setActiveWorkspace(project.workspaceId)` on click (an inline handler in a small wrapper `<Link>`).
+  - `{projectName}` → `to="/app/project/$projectId"`, `params={{ projectId }}`.
 
-## Explicit non-goals
+- **`src/routes/app.project.$projectId.index.tsx`** — add the same breadcrumb (`{brandName} /`) at the top pointing to `/app/projects` (brand's project list), for the project → brand hop.
 
-- No cascade to `concepts`, `elements`, or `image_previews` — those stay exactly as they are.
-- No re-classification / re-research is triggered by brief edits (the next explicit "Regenerate" on a concept will pick up new values through the existing generation flow).
-- The `themePalette` on `research.classification` is not recomputed here. If new photos change the dominant colors, the palette refreshes only when the user reruns research or a concept-level regenerate. Called out in a small helper note under the photos card so users know how to refresh the theme.
+- **`src/routes/app.project.$projectId.edit.tsx`** — already has "← Back to project" using params; keep unchanged.
+
+## 5. Non-goals
+
+- No new DB migration (cascades already exist).
+- No changes to concept/element regeneration logic.
+- Back navigation never reads `window.history`; every hop is a typed `<Link>` with the parent's ID from route params or the in-memory record.
 
 ## Files touched
 
-- New: `src/routes/app.project.$projectId.edit.tsx` — the form (two cards, two save buttons, uses TopBar + BackLink).
-- Edit: `src/lib/store.tsx` — add `updateProjectBrief` and `updateWorkspaceDescription`; expose in the context value + hook return type.
-- Edit: `src/routes/app.project.$projectId.index.tsx` — add "Edit project" link to the header area.
-
-## Technical details
-
-- Form state uses local `useState` per field, seeded once from the store snapshot in `useMemo` on mount, so store re-renders don't clobber user edits.
-- Photo save uses the same `ProductImageRef[]` shape the create flow uses; `analyze-product-images` request body matches the existing call in `app.product.new.tsx`.
-- Brief-fields save writes both tables (`brands`, `projects`) in `Promise.all`; failures surfaced individually.
-- "Photos changed" check compares the sorted list of `image.id` values from stored vs. buffered arrays.
+- Edit: `src/lib/store.tsx` (async deletes + interface).
+- Edit: `src/routes/app.projects.tsx` (dialog wiring; no window.confirm; brand-delete redirect).
+- Edit: `src/routes/app.project.$projectId.index.tsx` (Delete button, breadcrumb).
+- Edit: `src/routes/app.project.$projectId.concept.$conceptId.tsx` (breadcrumb).
+- New: `src/components/ConfirmDeleteDialog.tsx`.
