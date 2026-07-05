@@ -741,19 +741,36 @@ function OfferSection({ ctx }: { ctx: SectionCtx }) {
   const accentText = contrastText(theme.accent);
   return (
     <section
-      className="px-6 md:px-12 py-16 text-center"
-      style={{ background: theme.accent, color: accentText }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{
+        background: withAlpha(theme.accent, 0.08),
+        color: theme.text,
+        borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}`,
+      }}
     >
-      <div className="max-w-2xl mx-auto">
-        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-3">
+      <div
+        className="max-w-2xl mx-auto text-center p-10 md:p-12 rounded-2xl"
+        style={{
+          background: theme.surface,
+          border: `1px solid ${withAlpha(theme.accent, 0.25)}`,
+          boxShadow: `0 20px 40px -24px ${withAlpha(theme.accent, 0.3)}`,
+        }}
+      >
+        <h2
+          className="text-3xl md:text-4xl font-semibold tracking-tight mb-3"
+          style={{ color: theme.primary }}
+        >
           {E("title", "Add offer title")}
         </h2>
-        <p className="text-base opacity-90 mb-7 leading-relaxed">
+        <p
+          className="text-base mb-7 leading-relaxed"
+          style={{ color: theme.mutedText }}
+        >
           {E("subtitle", "Add offer subtitle", true)}
         </p>
         <span
           className="inline-flex items-center px-7 py-3.5 rounded-lg text-sm font-semibold"
-          style={{ background: theme.primary, color: contrastText(theme.primary) }}
+          style={{ background: theme.accent, color: accentText }}
         >
           {E("ctaLabel", "Add offer CTA")}
         </span>
@@ -761,6 +778,7 @@ function OfferSection({ ctx }: { ctx: SectionCtx }) {
     </section>
   );
 }
+
 
 function GuaranteeSection({ ctx }: { ctx: SectionCtx }) {
   const { theme, section: s } = ctx;
