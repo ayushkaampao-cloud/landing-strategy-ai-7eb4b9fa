@@ -105,6 +105,14 @@ function ConceptDetail() {
   }, [images]);
   const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
+  // If the project uploaded product photos, use the first one directly as the
+  // hero image instead of an AI-generated one. Other sections still use AI.
+  const heroProductImage = useMemo(() => {
+    const imgs = useStore.prototype ? [] : [];
+    // Read from store snapshot; the store already returns [] when absent.
+    return imgs.length ? imgs : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, productImageCount]);
   const theme = useMemo(() => {
     const stored = research?.classification?.themePalette;
     if (stored) return stored;
@@ -114,6 +122,7 @@ function ConceptDetail() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [research?.classification?.themePalette, research?.classification?.category, visualProfile]);
+
 
   if (!project || !concept || !product || !workspace) {
     return (

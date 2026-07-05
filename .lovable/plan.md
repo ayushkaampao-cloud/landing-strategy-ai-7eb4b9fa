@@ -1,55 +1,52 @@
-## Diagnosis
+## Scope
 
-### Bug 1 — "Generate real image" per-section button does nothing
+Three focused changes, no content/copy generator work.
 
-The two entry points call **completely different backends**:
+## 1. Image generation bugs — verify + tighten
 
-- **Sidebar "Generate images" button** (`handleGenerateImages`, concept route line 412) → POST `/api/generate-images` → Lovable AI Gateway (`google/gemini-3.1-flash-image`) → uploads to Supabase storage → returns signed URL. Server-side, reliable. **This is the one that works.**
-- **Per-section "Generate real image" button** (`handleGenerateRealImage`, concept route line 337) → `generateRealImage()` in `src/lib/puter.ts` → `window.puter.ai.txt2img(...)` loaded from `https://js.puter.com/v2/` (script tag in `__root.tsx` line 110). **This is the broken path.**
+The per-section "Generate real image" button and cross-section overwrite fix (from the last diagnosis) are already implemented in `src/routes/app.project.$projectId.concept.$conceptId.tsx` (routed through `/api/generate-images`) and `src/lib/store.tsx` (`updateImageForSection` per-section upsert, `saveImages` merge-preserving `real` status). Concrete follow-up work in this step:
 
-The Puter path fails silently for users because `puter.ai.txt2img` requires a Puter.com account/session; without one it opens a blocked auth popup or the promise never resolves, so the click just spins. The `preview.$shareToken.tsx` route has no generate button at all — it's read-only — so the "elsewhere it works" is really the sidebar bulk button on the same page, which uses the working gateway path.
+- Manually verify the per-section button on the concept detail view now returns a real image and does not clear other sections' images.
+- No further code change unless verification fails; if it does, add a per-section concurrency ref in `handleGenerateRealImage` (in addition to the disabled state) to block a second click while the DB round-trip completes.
 
-There is no reason to keep two different image backends. The fix is to route the per-section button through `/api/generate-images` for a single item, matching the bulk path.
+## 2. Hero uses uploaded product photo directly
 
-### Bug 2 — Generating one section wipes another section's image
+Goal: when the project has uploaded product photos, the hero section renders the actual uploaded photo (no AI call for that slot). AI generation continues to power all other sections.
 
-`handleGenerateRealImage` (line 349) rebuilds the whole image array from a memoized closure:
+Changes, all in `src/routes/app.project.$projectId.concept.$conceptId.tsx`:
 
-```ts
-const next = images.map((i) =>
-  i.sectionId === sectionId ? { ...i, realUrl: url, status: "real" } : i,
-);
-saveImages(conceptId, next);
-```
+- Add a `heroProductImage` memo: `getProductImages(projectId)[0]?.dataUrl ?? null`.
+- Build a `displayImageBySection` map derived from `imageBySection`: for every section with `type === "hero"`, if `heroProductImage` is set, override with a synthetic `GeneratedImagePreview` `{ sectionId, previewUrl: heroProductImage, realUrl: heroProductImage, status: "real", imagePrompt: "Uploaded product photo", imageStyle: "uploaded", imageMode: "product_hero" }`. Pass this map into the section renderer loop instead of `imageBySection`.
+- In `handleGenerateImages` (bulk): when `heroProductImage` exists, filter out items whose `sectionId` starts with `hero-` OR whose section type is `hero` before POSTing to `/api/generate-images`. This prevents wasting a Gemini call and prevents an AI hero from overwriting the uploaded photo.
+- In the per-section image toolbar (lines ~532-580): when the section is a hero AND `heroProductImage` exists, hide the "Generate real image" button and change the caption to `Using uploaded product photo`.
+- No change to `SectionRenderer` — it already renders `image.realUrl` first via `<img src=…>`, and a data-URL works directly in `<img>`.
+- No DB write for the synthetic hero image — it lives in-memo only and is re-derived on load from `getProductImages`.
 
-`images` is captured from the render that started the request. `saveImages` in `src/lib/store.tsx` line 929 then does a **delete-all-then-reinsert** against `image_previews` for the concept's element row (`.delete().eq("element_id", elemId)` → `.insert(rows)`). Two consequences:
+Edge cases:
+- Multiple uploaded photos: use the first (`order` is already respected by `getProductImages`).
+- No uploaded photos: behavior unchanged — hero goes through AI like today.
+- Download-zip: `downloadConceptZip` receives `images` (not the display map). To keep the zip's hero as the uploaded photo, pass a `displayImages` array (with the hero override merged in) into `downloadConceptZip` instead of raw `images`.
 
-1. **Race between concurrent per-section clicks:** if section A is still generating when B finishes, B writes its stale snapshot (with A pre-update) and overwrites A's just-saved `realUrl`. Same on the DB (last delete-insert wins).
-2. **Race with the bulk "Generate images" button:** it also calls `saveImages(conceptId, data.previews)` with a fresh Gateway response and clobbers per-section `realUrl`s already saved.
+## 3. Visual theme: contrast & readability pass
 
-So it's both: the client state slot is per-concept (not per-section) and the DB write is a full replace. Nothing is actually keyed per section id at the write level.
+The palette logic (`resolveThemePalette` in `src/lib/theme/palette.ts`) stays untouched. Only the section-level styling in `src/components/SectionRenderer.tsx` changes so accent/primary become highlights, not full-section fills.
 
-## Fix plan
+Adjustments:
 
-Frontend-only changes; no schema changes.
+- **CtaSection** — currently `background: theme.primary` (full dark block). Change to `background: theme.background`, wrap contents in a rounded card: `background: theme.surface`, `border: 1px solid withAlpha(theme.primary, 0.12)`, generous padding, `boxShadow: 0 20px 40px -20px withAlpha(theme.primary, 0.15)`. Headline uses `theme.primary` on light. CTA button keeps `background: theme.accent` (highlight). Section padding stays `py-20`.
+- **OfferSection** — currently `background: theme.accent` (full colored block). Change to `background: withAlpha(theme.accent, 0.08)` with an inner white card (`theme.surface`, subtle accent border). Title in `theme.primary`, subtitle in `theme.mutedText`, CTA button `background: theme.accent`. Keeps the "offer feels special" cue without a heavy full-bleed color.
+- **ComparisonSection** — the "isOurs" card keeps `background: theme.primary` (single card, intentional emphasis) but soften the shadow to `0 10px 30px -15px withAlpha(theme.primary, 0.35)`.
+- **Section rhythm** — bump vertical padding on `ProblemSolutionSection`, `FeatureGridSection`, `LifestyleSection`, `FaqSection`, `DetailsSection`, `GenericSection` from `py-16` → `py-20 md:py-24` for more breathing room; on `BenefitStripSection` keep compact but add clearer top/bottom borders using `withAlpha(theme.primary, 0.1)` (currently 0.08).
+- **Between-section separators** — add a hairline `borderTop: 1px solid withAlpha(theme.primary, 0.06)` at the top of every section that uses `theme.background`. This lands as a subtle divider so consecutive light sections don't blur together, without introducing new colored blocks.
+- **StorySection** — currently `withAlpha(theme.primary, 0.04)`; keep, but add a matching hairline top border for consistency.
 
-1. **Unify the per-section trigger with the gateway path.**
-   In `src/routes/app.project.$projectId.concept.$conceptId.tsx`, rewrite `handleGenerateRealImage(sectionId)` to POST a single-item payload to `/api/generate-images` (same shape as `handleGenerateImages`, `items: [{ sectionId, imagePrompt, imageStyle, imageMode, negativePrompt }]`) instead of calling `generateRealImage` from `@/lib/puter`. Use the returned `previews[0].previewUrl` as the section's `realUrl`, set `status: "real"`. Drop the `generateRealImage` import and the unused `referenceImagesForReal` shim.
+Do not touch: `styles.css` tokens, `palette.ts`, `SectionRenderer` component structure/hooks, or copy fields.
 
-2. **Make the save merge per-section instead of replacing the array.**
-   Add `updateImageForSection(conceptId, sectionId, patch)` to `src/lib/store.tsx`. It should:
-   - Read the latest images from `dataRef.current.images[conceptId]` (not a stale closure), apply the patch to the matching `sectionId` (insert if missing), setState, and bump.
-   - On the DB side, `upsert` a single `image_previews` row keyed by `(element_id, metadata->>sectionId)` — or simpler and safe: `delete().eq("element_id", elemId).eq("metadata->>sectionId", sectionId)` then insert just that one row. This removes the full delete-and-reinsert that causes cross-section wipes.
-   Use this new function inside `handleGenerateRealImage` (success and failure branches).
+## Technical notes
 
-3. **Keep the existing `saveImages` for the bulk "Generate images" flow**, but before writing, merge the incoming previews with any existing entries that already have `realUrl` / `status === "real"` so the bulk regen doesn't blow away per-section real images. Concretely: for each incoming preview, if the current stored entry for that `sectionId` has `realUrl`, preserve `realUrl` and `status: "real"` on the merged object.
-
-4. **Guard against concurrent clicks on the same section** (defense in depth): the button is already `disabled={!!realGenerating[s.id]}`; keep that. No further concurrency lock needed once each write is per-section.
-
-5. **Remove `src/lib/puter.ts` usage** from the concept route. Leaving the file in place is fine; it's just no longer imported here. No change to `/api/generate-images` server route — it already accepts a single-item `items` array and writes each result independently.
-
-### Technical notes
-
-- No changes to `SectionRenderer`, theme code, or preview route.
-- No DB migration: `image_previews` already stores `metadata.sectionId`, which is what the new per-section delete/upsert filters on.
-- After the fix, the per-section button will use the same Gemini path as the bulk button, so behavior (quality, timing, storage bucket, signed-URL TTL) is consistent between the two entry points.
+- Files touched: `src/routes/app.project.$projectId.concept.$conceptId.tsx`, `src/components/SectionRenderer.tsx`. No DB migration, no server route changes, no `store.tsx` changes beyond what already shipped.
+- No new state slot for the hero override — pure derivation from `getProductImages(projectId)` on each render.
+- After the change, verify:
+  1. Concept with uploaded photos → hero renders the uploaded photo; bulk "Generate images" does not overwrite it; "Generate real image" button is hidden on hero.
+  2. Concept without uploaded photos → hero still goes through AI generation as before.
+  3. Scrolling the preview shows alternating light sections with clear separators and only accent-colored highlights on CTAs/offer strip; no consecutive dark full-bleed blocks.
