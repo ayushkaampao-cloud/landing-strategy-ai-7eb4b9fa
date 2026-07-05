@@ -1,122 +1,62 @@
-# Visual rendering system: brand theme + styled sections
+# Edit project screen
 
-Two-part change built on top of the existing content pipeline. No changes to what content gets generated (classification fields, strategies, elements copy) beyond adding a `themePalette` object.
+New route `/app/project/$projectId/edit` that lets the user update the brief and manage product photos, without touching already-generated concepts, elements, or images.
 
-## Part 1 — Brand theme palette
+## Entry point
 
-### Data
-- Add `themePalette` to `projects.classification` JSON (no new column needed — `classification` is already `Json`). Shape:
-  ```ts
-  themePalette: {
-    primary: string;       // hex, e.g. "#1F3B4D"
-    accent: string;        // hex
-    background: string;    // hex — neutral surface
-    surface: string;       // hex — card / elevated surface
-    text: string;          // hex — body text on background
-    mutedText: string;     // hex
-    source: "product_photos" | "category_default";
-  }
-  ```
-- Extend `ProjectClassification` in `src/types.ts` with an optional `themePalette` field of the shape above.
+- Add an "Edit project" link/button to the project view (`src/routes/app.project.$projectId.index.tsx`) in the header area beside the project title. Uses the same `Link` styling as other secondary actions on that page.
 
-### Generation (in `src/routes/api/classify-project.ts`)
-After `classifyProject()` returns the classification, compute `themePalette` and attach it to the returned object. Two sources, in priority order:
+## Fields (pre-filled)
 
-1. **Product-photo extraction** — if the caller passes a `projectId` (extend the POST `Body`), the handler queries `product_visual_profiles` for that project. If a row exists with `source_image_urls` (or `visibleColors`), pick the two most dominant / most-saturated colors via a lightweight in-worker sampler:
-   - Fetch up to 3 signed image URLs, decode to pixels with the `Response.arrayBuffer` + a tiny JS PNG/JPEG decoder is heavy — instead, we already store `visibleColors: string[]` on the visual profile (LLM-extracted color names/hexes). Convert those to hex via a small named-color map, then use the two most-saturated as primary/accent. Neutrals are derived by desaturating primary toward white/black using `oklch` conversions.
-   - Set `source: "product_photos"`.
-2. **Category default** — a hard-coded map keyed by `ProjectCategory` + `toneSummary` keywords:
-   - `beauty_skincare` → warm cream / muted terracotta / soft peach
-   - `b2b_saas` / `finance_software` → cool slate + electric blue accent
-   - `dtc_physical_product` → warm neutral + brand-adjacent accent
-   - `food_beverage` → warm off-white + saturated accent
-   - `hardware_device` → deep charcoal + neon accent
-   - `service_consulting` → editorial ivory + deep primary
-   - fallback → neutral warm gray + indigo accent
-   - Set `source: "category_default"`.
+All editable in one form, pre-filled from the current `Project` / `Workspace` values:
 
-`research-project.ts` (which invokes `classifyProject`) passes through `projectId` when available so extraction can run at initial research time. When `projectId` isn't available yet (very first classify before project is persisted), it falls back to category defaults; a later re-classify can upgrade it.
+| Field | Backing column | Table |
+|---|---|---|
+| Brand description | `brands.description` | `brands` (workspace) |
+| Product description | `projects.product_description` | `projects` |
+| Key features | `projects.key_features` | `projects` |
+| Key benefits | `projects.key_benefits` | `projects` |
+| Goal | `projects.goal` (enum select) | `projects` |
+| Tone | `projects.tone` | `projects` |
+| Notes | `projects.notes` | `projects` |
 
-### Consumption
-`Project.classification.themePalette` is read by the concept renderer and passed as a `theme` prop to every styled section. No global CSS variable mutation — we use inline styles / a scoped CSS-vars wrapper on the preview surface so switching concepts across projects doesn't leak theme state.
+On submit: single "Save changes" button. Writes go to `brands` (for brand description) and `projects` (for the rest) in parallel. Local store state is updated optimistically; toast on success / error. No auto-navigation — stay on the edit page so the user can also manage photos.
 
-## Part 2 — Styled per-section-type components
+## Product photos
 
-Replace the switch inside `src/components/SectionRenderer.tsx` with a dispatcher that picks a real styled component per `SectionType`. New folder: `src/components/sections/`.
+Second card on the same page:
+- Reuse `<ProductImageUploader>` (already handles add/remove/reorder) seeded with `getProductImages(projectId)`.
+- Local edit buffer; a "Save photos" button below the uploader commits changes. This keeps the analyze-images cost off every keystroke.
+- On save:
+  1. Persist via `saveProductImages(projectId, nextImages)` (already writes `product_visual_profiles.source_image_urls` + updates `productImageCount`).
+  2. If the set changed (compare by id list), POST `/api/analyze-product-images` with the new set, then call `saveVisualProfile(projectId, data.profile)`. Show a "Re-analyzing photos…" inline spinner during the call.
+  3. If the new set is empty, call `saveVisualProfile(projectId, null)` and skip the analyze fetch.
+- Never blocks the brief-fields form; the two save buttons are independent.
 
-Components (one per existing `SectionType`):
-- `HeroSection.tsx` — full-bleed hero, image on the right at ≥lg (or as background with overlay when the image mode is `abstract_brand_texture` / `iconographic_brand_visual`). Eyebrow tag, H1, subhead, primary + secondary CTA styled with `theme.accent`.
-- `BenefitStripSection.tsx` — horizontal 3–4 column strip of bullets with icons, no image; accent-tinted background.
-- `ProblemSolutionSection.tsx` — two-column: problem copy left, generated image right in a rounded card; theme-tinted background.
-- `FeatureGridSection.tsx` — grid of item cards; if the section image exists, use it as a header banner above the grid, and each item gets a numbered accent chip.
-- `StorySection.tsx` — editorial layout: large image left, long-form copy right, accent quote mark.
-- `LifestyleSection.tsx` — image-dominant (16:7), copy centered below.
-- `ComparisonSection.tsx` — two-card comparison; "ours" card uses `theme.primary` background with `theme.background` text, "theirs" muted.
-- `SocialProofSection.tsx` — centered testimonial with accent quote marks; if image exists, small circular avatar above; bullets render as a stats row.
-- `FaqSection.tsx` — accordion-styled list; theme-tinted expanded state (no interaction change — keep current static open state).
-- `OfferSection.tsx` — full-width accent-background band with headline, subtitle, CTA in inverted colors.
-- `GuaranteeSection.tsx` — badge + short copy inline; accent check mark.
-- `CtaSection.tsx` — final full-bleed CTA on `theme.primary`, headline in `theme.background`, button in `theme.accent`.
-- `DetailsSection.tsx` — two-column: bulleted details left, image right.
+## Store additions (`src/lib/store.tsx`)
 
-Each component:
-- Accepts `{ section, theme, image, editing }` where `editing` bundles the existing `onEdit/onEditBullets/onEditItems/isEdited/saveError` props so all inline-editing (from the previous PR) still works — we pass these into the same `<Editable>` / `<EditableBullets>` primitives, just inside new layouts.
-- Embeds the section image **inline** using `image.realUrl || image.previewUrl` if present. The current concept page block that renders `<img>` **below** each section (lines ~431–500 of `app.project.$projectId.concept.$conceptId.tsx`) is removed — images now live inside each section component in the right slot for that layout.
-- When no image URL exists yet, renders a **branded placeholder** for that slot: a rounded frame filled with a diagonal gradient of `theme.primary` → `theme.accent` at low opacity over `theme.surface`, with a small monospace label ("Hero visual", "Comparison graphic", etc.) — never gray, never blank.
-- Uses inline styles for the theme colors (`style={{ background: theme.background, color: theme.text }}`) rather than Tailwind color classes, so the palette actually applies. Layout, spacing, and typography stay in Tailwind classes.
-- Responsive: single-column below `md`, multi-column above.
+Two new helpers (no schema change — projects table already has all columns; brands already has description):
 
-### Dispatcher
-`SectionRenderer` becomes a thin dispatcher:
-```tsx
-const REGISTRY: Record<SectionType, ComponentType<SectionComponentProps>> = {
-  hero: HeroSection, "benefit-strip": BenefitStripSection, /* … */
-};
-const Comp = REGISTRY[s.type] ?? GenericSection;
-return <Comp section={s} theme={theme} image={image} editing={editing} />;
-```
-`GenericSection` (fallback) uses the theme too, so an unknown/future section type still looks on-brand. Section-type inference: `s.type` already exists on every generated section — we trust it. If a section arrives with an unknown type, we log once and use `GenericSection`; we do NOT infer from position.
+- `updateProjectBrief(projectId, patch: Partial<Pick<Project, 'goal' | 'tone' | 'notes' | ...>> & { productDescription?; keyFeatures?; keyBenefits? })` — updates local `projects` + `products` arrays and issues `supabase.from('projects').update({...}).eq('id', projectId)` mapping camelCase → snake_case columns.
+- `updateWorkspaceDescription(workspaceId, description)` — updates local `workspaces` and `supabase.from('brands').update({ description }).eq('id', workspaceId)`.
 
-### Concept page wiring (`app.project.$projectId.concept.$conceptId.tsx`)
-- Read `themePalette` from `project.classification?.themePalette`; if missing, use the category-default derivation (same map as the classifier) as a client-side fallback so old projects still render.
-- Pass `theme` and `image` into `SectionRenderer` alongside the existing editing props.
-- Remove the standalone image block below each section (its "generate real image" affordance moves into a small overlay on the image inside the section, or stays as-is directly under — TBD by simplest diff; either way the section image itself is embedded).
-- Wrap the preview surface in a `<div style={{ background: theme.background }}>` so the whole page reads on-brand, not on white.
+Both are optimistic with error toast + revert on failure (best-effort — matches existing store patterns which fire-and-forget most writes).
+
+## Explicit non-goals
+
+- No cascade to `concepts`, `elements`, or `image_previews` — those stay exactly as they are.
+- No re-classification / re-research is triggered by brief edits (the next explicit "Regenerate" on a concept will pick up new values through the existing generation flow).
+- The `themePalette` on `research.classification` is not recomputed here. If new photos change the dominant colors, the palette refreshes only when the user reruns research or a concept-level regenerate. Called out in a small helper note under the photos card so users know how to refresh the theme.
+
+## Files touched
+
+- New: `src/routes/app.project.$projectId.edit.tsx` — the form (two cards, two save buttons, uses TopBar + BackLink).
+- Edit: `src/lib/store.tsx` — add `updateProjectBrief` and `updateWorkspaceDescription`; expose in the context value + hook return type.
+- Edit: `src/routes/app.project.$projectId.index.tsx` — add "Edit project" link to the header area.
 
 ## Technical details
 
-**Files touched**
-- `src/types.ts` — add `themePalette` to `ProjectClassification`, add `ThemePalette` type.
-- `src/routes/api/classify-project.ts` — accept optional `projectId`, run extractor, attach `themePalette`.
-- `src/routes/api/research-project.ts` — forward `projectId` when calling `classifyProject`.
-- `src/lib/theme/palette.ts` — new: category default map, product-photo extractor, hex/oklch helpers, `resolveThemePalette(classification)` for client fallback.
-- `src/components/SectionRenderer.tsx` — becomes dispatcher.
-- `src/components/sections/*.tsx` — 13 new files, one per section type + `GenericSection` + shared `BrandedImageFrame` + `SectionComponentProps` type.
-- `src/routes/app.project.$projectId.concept.$conceptId.tsx` — remove standalone image block, pass theme, wrap surface in themed div.
-
-**Non-goals (explicitly untouched)**
-- `generate-strategies.ts`, `generate-elements.ts` copy, image generation pipeline, AI gateway model config, `image_previews` schema, elements editing behavior.
-
-**Migration**
-- None required — `classification` is already `Json` and `themePalette` is nested inside it.
-
-## Diagram
-
-```text
-classify-project.ts
-  ├─ classifyProject() ─► LLM classification
-  └─ resolveThemePalette({ classification, projectId? })
-        ├─ product_visual_profiles.visibleColors ─► extract primary/accent
-        └─ category default map (fallback)
-                                    │
-                                    ▼
-                projects.classification.themePalette (Json)
-                                    │
-                          concept page reads theme
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-            <HeroSection theme=…>         <FaqSection theme=…>
-              embeds image inline           branded placeholder
-              accent CTA, theme bg          if image missing
-```
+- Form state uses local `useState` per field, seeded once from the store snapshot in `useMemo` on mount, so store re-renders don't clobber user edits.
+- Photo save uses the same `ProductImageRef[]` shape the create flow uses; `analyze-product-images` request body matches the existing call in `app.product.new.tsx`.
+- Brief-fields save writes both tables (`brands`, `projects`) in `Promise.all`; failures surfaced individually.
+- "Photos changed" check compares the sorted list of `image.id` values from stored vs. buffered arrays.
