@@ -10,7 +10,7 @@ const GEMINI_DIRECT_URL = `https://generativelanguage.googleapis.com/v1beta/mode
 const LOVABLE_MODEL = "google/gemini-3-flash-preview";
 // Free-tier OpenRouter model with native structured output + large context.
 // Verified present in OpenRouter's /api/v1/models catalog.
-const OPENROUTER_MODEL = "openai/gpt-oss-20b:free";
+const OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 
 export interface LLMOptions {
   system?: string;
