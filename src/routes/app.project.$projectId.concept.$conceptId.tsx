@@ -133,6 +133,54 @@ function ConceptDetail() {
     }
   };
 
+  const shareUrl = (token: string) =>
+    `${typeof window !== "undefined" ? window.location.origin : ""}/preview/${token}`;
+
+  const handleSharePreview = async () => {
+    if (!concept || shareBusy) return;
+    setShareBusy(true);
+    try {
+      const token = await enableConceptShare(concept.id);
+      try {
+        await navigator.clipboard.writeText(shareUrl(token));
+        toast.success("Share link copied");
+      } catch {
+        toast.success("Share preview enabled");
+      }
+    } catch (err) {
+      toast.error("Couldn't enable share link");
+      console.error("[share] enable", err);
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    if (!concept?.shareToken) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl(concept.shareToken));
+      toast.success("Link copied");
+    } catch {
+      toast.error("Couldn't copy link");
+    }
+  };
+
+  const handleDisableShare = async () => {
+    if (!concept) return;
+    setShareBusy(true);
+    try {
+      await disableConceptShare(concept.id);
+      toast.success("Share link disabled");
+      setDisableShareOpen(false);
+    } catch (err) {
+      toast.error("Couldn't disable share link");
+      console.error("[share] disable", err);
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+
   const regenerate = async () => {
     if (!workspace || !product || !project || !concept) return;
     // Double-guard: ref catches double-clicks within the same tick before
