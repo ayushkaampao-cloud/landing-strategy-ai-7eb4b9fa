@@ -5,11 +5,11 @@ import { FRAMEWORK_META, generateConceptsForProject } from "@/lib/generator";
 import { SectionRenderer } from "@/components/SectionRenderer";
 import { GroundingBadge } from "@/components/GroundingBadge";
 import { VisualProfileSummary } from "@/components/VisualProfileSummary";
-import { generateRealImage } from "@/lib/puter";
+
 import { storage } from "@/lib/storage";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, ProductImageRef, SectionProps } from "@/types";
+import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, SectionProps } from "@/types";
 import { resolveThemePalette } from "@/lib/theme/palette";
 import { downloadConceptZip } from "@/lib/downloadConceptZip";
 import {
@@ -45,6 +45,7 @@ function ConceptDetail() {
     saveElements,
     getImages,
     saveImages,
+    updateImageForSection,
     getProductImageCount,
     getVisualProfile,
     setActiveWorkspace,
@@ -318,51 +319,52 @@ function ConceptDetail() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  // generateRealImage only checks referenceImages.length > 0 to inject grounding
-  // text, so a single placeholder is enough after refresh when the count > 0.
-  const referenceImagesForReal: ProductImageRef[] =
-    productImageCount > 0
-      ? [
-          {
-            id: "ref",
-            dataUrl: "",
-            width: 0,
-            height: 0,
-            addedAt: new Date().toISOString(),
-            order: 0,
-          },
-        ]
-      : [];
-
   async function handleGenerateRealImage(sectionId: string) {
     const img = imageBySection[sectionId];
     if (!img) return;
     setRealGenerating((s) => ({ ...s, [sectionId]: true }));
     try {
-      const url = await generateRealImage({
-        prompt: img.imagePrompt,
-        negativePrompt: concept?.schema.sections.find((s) => s.id === sectionId)?.negativePrompt,
-        imageMode: img.imageMode,
-        visualProfile,
-        referenceImages: referenceImagesForReal,
+      const section = concept?.schema.sections.find((s) => s.id === sectionId);
+      const res = await fetch("/api/generate-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          projectName: project!.projectName,
+          conceptName: concept!.conceptName,
+          category: research?.classification?.category,
+          items: [
+            {
+              sectionId,
+              imagePrompt: img.imagePrompt,
+              imageStyle: img.imageStyle,
+              imageMode: img.imageMode,
+              negativePrompt: section?.negativePrompt,
+            },
+          ],
+        }),
       });
-      const next = images.map((i) =>
-        i.sectionId === sectionId ? { ...i, realUrl: url, status: "real" as const } : i,
-      );
-      saveImages(conceptId, next);
+      if (!res.ok) throw new Error(`Gateway ${res.status}`);
+      const data = (await res.json()) as { previews: GeneratedImagePreview[] };
+      const preview = data.previews?.[0];
+      if (!preview || preview.status === "failed" || !preview.previewUrl) {
+        throw new Error("Image generation returned no image");
+      }
+      updateImageForSection(conceptId, sectionId, {
+        realUrl: preview.previewUrl,
+        status: "real",
+      });
       setImagesVersion((v) => v + 1);
       toast.success("Real image generated");
     } catch (err) {
-      const next = images.map((i) =>
-        i.sectionId === sectionId ? { ...i, status: "failed" as const } : i,
-      );
-      saveImages(conceptId, next);
+      updateImageForSection(conceptId, sectionId, { status: "failed" });
       setImagesVersion((v) => v + 1);
       toast.error(`Image generation failed: ${(err as Error).message}`);
     } finally {
       setRealGenerating((s) => ({ ...s, [sectionId]: false }));
     }
   }
+
 
 
   async function handleGenerateElements() {

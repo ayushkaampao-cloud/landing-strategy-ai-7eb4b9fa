@@ -116,6 +116,11 @@ interface StoreContextValue extends AppData {
   saveElements: (conceptId: string, e: LandingPageElements) => void;
   getImages: (conceptId: string) => GeneratedImagePreview[];
   saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => void;
+  updateImageForSection: (
+    conceptId: string,
+    sectionId: string,
+    patch: Partial<GeneratedImagePreview>,
+  ) => void;
   getProductImages: (projectId: string) => ProductImageRef[];
   loadProductImages: (projectId: string) => Promise<ProductImageRef[]>;
   saveProductImages: (projectId: string, imgs: ProductImageRef[]) => void;
@@ -926,35 +931,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [bump]);
 
+  const persistImagesToDb = useCallback(
+    async (conceptId: string, imgs: GeneratedImagePreview[]) => {
+      let elemId = dataRef.current.elementRowIdByConcept[conceptId];
+      if (!elemId) {
+        const existing = dataRef.current.elements[conceptId];
+        if (existing) {
+          elemId = await upsertElementsRow(conceptId, existing);
+        } else {
+          elemId = uid();
+          await supabase.from("elements").insert({
+            id: elemId,
+            concept_id: conceptId,
+            section_id: "__doc__",
+            body_copy: null,
+          });
+          setData((d) => ({
+            ...d,
+            elementRowIdByConcept: { ...d.elementRowIdByConcept, [conceptId]: elemId! },
+          }));
+        }
+      }
+      return elemId!;
+    },
+    [],
+  );
+
   const saveImages = useCallback((conceptId: string, imgs: GeneratedImagePreview[]) => {
-    setData((d) => ({ ...d, images: { ...d.images, [conceptId]: imgs } }));
+    // Merge with existing so bulk regen doesn't wipe per-section "real" images.
+    const existing = dataRef.current.images[conceptId] ?? [];
+    const bySection: Record<string, GeneratedImagePreview> = {};
+    existing.forEach((i) => (bySection[i.sectionId] = i));
+    const merged = imgs.map((im) => {
+      const prev = bySection[im.sectionId];
+      if (prev && prev.realUrl && prev.status === "real") {
+        return { ...im, realUrl: prev.realUrl, status: "real" as const };
+      }
+      return im;
+    });
+    setData((d) => ({ ...d, images: { ...d.images, [conceptId]: merged } }));
     bump();
     if (dataRef.current.user) {
       (async () => {
-        // ensure elements row exists to attach to
-        let elemId = dataRef.current.elementRowIdByConcept[conceptId];
-        if (!elemId) {
-          const existing = dataRef.current.elements[conceptId];
-          if (existing) {
-            elemId = await upsertElementsRow(conceptId, existing);
-          } else {
-            elemId = uid();
-            await supabase.from("elements").insert({
-              id: elemId,
-              concept_id: conceptId,
-              section_id: "__doc__",
-              body_copy: null,
-            });
-            setData((d) => ({
-              ...d,
-              elementRowIdByConcept: { ...d.elementRowIdByConcept, [conceptId]: elemId! },
-            }));
-          }
-        }
+        const elemId = await persistImagesToDb(conceptId, merged);
         await supabase.from("image_previews").delete().eq("element_id", elemId);
-        if (imgs.length > 0) {
-          const rows = imgs.map((im) => ({
-            element_id: elemId!,
+        if (merged.length > 0) {
+          const rows = merged.map((im) => ({
+            element_id: elemId,
             preview_url: im.previewUrl,
             status: im.status,
             metadata: {
@@ -971,7 +994,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })().catch((err) => console.error("saveImages db", err));
     }
-  }, [bump]);
+  }, [bump, persistImagesToDb]);
+
+  const updateImageForSection = useCallback(
+    (conceptId: string, sectionId: string, patch: Partial<GeneratedImagePreview>) => {
+      const current = dataRef.current.images[conceptId] ?? [];
+      const idx = current.findIndex((i) => i.sectionId === sectionId);
+      let next: GeneratedImagePreview[];
+      if (idx >= 0) {
+        next = current.map((i, k) => (k === idx ? { ...i, ...patch } : i));
+      } else {
+        next = [
+          ...current,
+          {
+            sectionId,
+            imagePrompt: "",
+            imageStyle: "",
+            previewUrl: "",
+            status: "generated",
+            ...patch,
+          } as GeneratedImagePreview,
+        ];
+      }
+      setData((d) => ({ ...d, images: { ...d.images, [conceptId]: next } }));
+      bump();
+      if (dataRef.current.user) {
+        (async () => {
+          const elemId = await persistImagesToDb(conceptId, next);
+          const merged = next.find((i) => i.sectionId === sectionId)!;
+          // Remove any existing row for this section, then insert the fresh one.
+          await supabase
+            .from("image_previews")
+            .delete()
+            .eq("element_id", elemId)
+            .eq("metadata->>sectionId", sectionId);
+          await supabase.from("image_previews").insert({
+            element_id: elemId,
+            preview_url: merged.previewUrl,
+            status: merged.status,
+            metadata: {
+              sectionId: merged.sectionId,
+              imagePrompt: merged.imagePrompt,
+              imageStyle: merged.imageStyle,
+              imageMode: merged.imageMode,
+              category: merged.category,
+              realUrl: merged.realUrl,
+              placeholderLabel: merged.placeholderLabel,
+            },
+          });
+        })().catch((err) => console.error("updateImageForSection db", err));
+      }
+    },
+    [bump, persistImagesToDb],
+  );
+
 
   const saveProductImages = useCallback(
     (projectId: string, imgs: ProductImageRef[]) => {
@@ -1146,6 +1222,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     saveElements,
     getImages: (id) => data.images[id] ?? [],
     saveImages,
+    updateImageForSection,
     getProductImages: (id) => data.productImages[id] ?? [],
     saveProductImages,
     loadProductImages,
