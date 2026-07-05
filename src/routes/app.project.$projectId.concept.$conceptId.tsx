@@ -110,11 +110,30 @@ function ConceptDetail() {
   // If the project uploaded product photos, use the first one directly as the
   // hero image instead of an AI-generated one. Other sections still use AI.
   const heroProductImage = useMemo(() => {
-    const imgs = useStore.prototype ? [] : [];
-    // Read from store snapshot; the store already returns [] when absent.
-    return imgs.length ? imgs : null;
+    const imgs = getProductImages(projectId);
+    return imgs[0]?.dataUrl ?? null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, productImageCount]);
+  const displayImageBySection = useMemo(() => {
+    if (!concept) return imageBySection;
+    if (!heroProductImage) return imageBySection;
+    const map = { ...imageBySection };
+    concept.schema.sections.forEach((s) => {
+      if (s.type === "hero") {
+        map[s.id] = {
+          sectionId: s.id,
+          imagePrompt: "Uploaded product photo",
+          imageStyle: "uploaded",
+          imageMode: "product_hero",
+          previewUrl: heroProductImage,
+          realUrl: heroProductImage,
+          status: "real",
+        } as GeneratedImagePreview;
+      }
+    });
+    return map;
+  }, [concept, imageBySection, heroProductImage]);
+
   const theme = useMemo(() => {
     const stored = research?.classification?.themePalette;
     if (stored) return stored;
