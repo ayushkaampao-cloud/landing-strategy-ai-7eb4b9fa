@@ -122,6 +122,8 @@ async function callOpenRouter(prompt: string, opts: LLMOptions): Promise<string>
         { role: "user", content: prompt },
       ],
       temperature: opts.temperature ?? 0.8,
+      // OpenRouter free tier caps affordable output at ~16k tokens; keep well below.
+      max_tokens: Math.min(opts.maxTokens ?? 8000, 16000),
       ...(opts.responseSchema
         ? {
             response_format: {
