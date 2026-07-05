@@ -35,9 +35,9 @@ export const Route = createFileRoute("/api/debug-llm")({
           }
           return Response.json({ ok: true, provider, configured, skip, result: parsed });
         } catch (err) {
+          console.error("[debug-llm] error:", err);
           return Response.json(
             { ok: false, configured, skip, error: (err as Error).message },
-            { status: 500 },
           );
         }
       },
