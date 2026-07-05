@@ -27,6 +27,7 @@ function EditProject() {
     products,
     workspaces,
     getProductImages,
+    loadProductImages,
     saveProductImages,
     saveVisualProfile,
     updateProjectBrief,
