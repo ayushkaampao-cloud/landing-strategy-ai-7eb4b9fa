@@ -51,6 +51,7 @@ export type Database = {
           framework_name: string
           id: string
           project_id: string
+          share_token: string | null
         }
         Insert: {
           concept_data: Json
@@ -58,6 +59,7 @@ export type Database = {
           framework_name: string
           id?: string
           project_id: string
+          share_token?: string | null
         }
         Update: {
           concept_data?: Json
@@ -65,6 +67,7 @@ export type Database = {
           framework_name?: string
           id?: string
           project_id?: string
+          share_token?: string | null
         }
         Relationships: [
           {
@@ -296,7 +299,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_shared_concept: { Args: { _token: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
