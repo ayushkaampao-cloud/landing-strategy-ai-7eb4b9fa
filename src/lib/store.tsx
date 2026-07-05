@@ -838,6 +838,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const enableConceptShare = useCallback(async (conceptId: string): Promise<string> => {
+    const existing = dataRef.current.concepts.find((c) => c.id === conceptId);
+    if (existing?.shareToken) return existing.shareToken;
+    const token =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : uid();
+    if (dataRef.current.user) {
+      const { error } = await supabase
+        .from("concepts")
+        .update({ share_token: token })
+        .eq("id", conceptId);
+      if (error) throw error;
+    }
+    setData((d) => ({
+      ...d,
+      concepts: d.concepts.map((c) =>
+        c.id === conceptId ? { ...c, shareToken: token } : c,
+      ),
+    }));
+    return token;
+  }, []);
+
+  const disableConceptShare = useCallback(async (conceptId: string): Promise<void> => {
+    if (dataRef.current.user) {
+      const { error } = await supabase
+        .from("concepts")
+        .update({ share_token: null })
+        .eq("id", conceptId);
+      if (error) throw error;
+    }
+    setData((d) => ({
+      ...d,
+      concepts: d.concepts.map((c) =>
+        c.id === conceptId ? { ...c, shareToken: null } : c,
+      ),
+    }));
+  }, []);
+
   const activeWorkspace = useMemo(
     () => data.workspaces.find((w) => w.id === data.activeWorkspaceId) ?? null,
     [data.workspaces, data.activeWorkspaceId],
