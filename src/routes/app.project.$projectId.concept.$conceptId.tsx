@@ -358,7 +358,8 @@ function ConceptDetail() {
 
     setRealGenerating((s) => ({ ...s, [sectionId]: true }));
     try {
-      const section = concept?.schema.sections.find((s) => s.id === sectionId);
+      // section resolved above
+
       const res = await fetch("/api/generate-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
