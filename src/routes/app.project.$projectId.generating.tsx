@@ -52,6 +52,7 @@ function Generating() {
       // 1. Research
       const researchPayload = {
         sourceMode: project.sourceMode ?? "brief",
+        projectId: project.id,
         landingPageUrl: project.landingPageUrl,
         siteUrl: product.siteUrl,
         notes: project.notes,

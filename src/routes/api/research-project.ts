@@ -9,6 +9,10 @@ interface Body {
   landingPageUrl?: string;
   siteUrl?: string;
   notes?: string;
+  /** Optional — when present, the server loads product_visual_profiles for
+   *  this project and passes its visibleColors to the classifier to derive
+   *  an on-brand themePalette from real product photos. */
+  projectId?: string;
   workspace: {
     name: string;
     brandDescription: string;
@@ -118,6 +122,34 @@ export const Route = createFileRoute("/api/research-project")({
         }
 
         try {
+          // Step 0: load visibleColors from product_visual_profiles if
+          // this project already has an analyzed profile; used to derive
+          // an on-brand themePalette from real product photos.
+          let visibleColors: string[] | undefined;
+          if (body.projectId) {
+            try {
+              const { supabaseAdmin } = await import(
+                "@/integrations/supabase/client.server"
+              );
+              const { data } = await supabaseAdmin
+                .from("product_visual_profiles")
+                .select("profile")
+                .eq("project_id", body.projectId)
+                .maybeSingle();
+              const profile = (data?.profile ?? null) as
+                | { visibleColors?: string[] }
+                | null;
+              if (Array.isArray(profile?.visibleColors)) {
+                visibleColors = profile!.visibleColors;
+              }
+            } catch (e) {
+              console.warn(
+                "[research] visual-profile lookup failed:",
+                (e as Error).message,
+              );
+            }
+          }
+
           // Step 1: classify.
           let classification: ProjectClassification | undefined;
           try {
@@ -138,6 +170,7 @@ export const Route = createFileRoute("/api/research-project")({
                 tone: body.project.tone,
                 notes: body.notes,
               },
+              visibleColors,
             });
           } catch (e) {
             console.warn("[research] classify failed, continuing:", (e as Error).message);
