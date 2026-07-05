@@ -36,9 +36,18 @@ function ProjectGallery() {
         </TopBar>
         <div className="p-8 max-w-4xl">
           <div className="mono-tag text-muted-foreground mb-2">Project</div>
-          <h1 className="text-3xl font-semibold tracking-tight mb-1">
-            {project.projectName}
-          </h1>
+          <div className="flex items-start justify-between gap-4 mb-1">
+            <h1 className="text-3xl font-semibold tracking-tight">
+              {project.projectName}
+            </h1>
+            <Link
+              to="/app/project/$projectId/edit"
+              params={{ projectId }}
+              className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface hover:border-foreground/30 shrink-0"
+            >
+              Edit project
+            </Link>
+          </div>
           <p className="text-muted-foreground text-sm mb-10">
             {product?.name} · {project.goal}
           </p>
