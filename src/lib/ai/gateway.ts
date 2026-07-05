@@ -183,7 +183,9 @@ async function runChain(
       errors.push(`${attempt.name}: ${reason}`);
     }
   }
-  throw new Error(`All LLM providers failed. ${errors.join(" | ")}`);
+  const detail = `All LLM providers failed. ${errors.join(" | ")}`;
+  console.error("[llm]", detail);
+  throw new Error(detail);
 }
 
 export async function callLLM(prompt: string, opts: LLMOptions = {}): Promise<string> {
