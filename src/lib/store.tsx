@@ -105,8 +105,8 @@ interface StoreContextValue extends AppData {
   isFieldEdited: (conceptId: string, path: string) => boolean;
   getEditedFields: (conceptId: string) => Record<string, boolean>;
   getFieldSaveError: (conceptId: string, path: string) => string | undefined;
-  deleteProject: (projectId: string) => void;
-  deleteWorkspace: (workspaceId: string) => void;
+  deleteProject: (projectId: string) => Promise<void>;
+  deleteWorkspace: (workspaceId: string) => Promise<void>;
   activeWorkspace: Workspace | null;
   getResearch: (projectId: string) => ProjectResearch | null;
   saveResearch: (projectId: string, r: ProjectResearch) => void;
