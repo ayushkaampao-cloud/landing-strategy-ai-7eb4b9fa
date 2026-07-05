@@ -8,7 +8,9 @@ const GEMINI_DIRECT_MODEL = "gemini-2.5-flash";
 const GEMINI_DIRECT_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_DIRECT_MODEL}:generateContent`;
 
 const LOVABLE_MODEL = "google/gemini-3-flash-preview";
-const OPENROUTER_MODEL = "google/gemini-2.5-flash";
+// Free-tier OpenRouter model with native structured output + large context.
+// Verified present in OpenRouter's /api/v1/models catalog.
+const OPENROUTER_MODEL = "google/gemma-4-31b-it:free";
 
 export interface LLMOptions {
   system?: string;
