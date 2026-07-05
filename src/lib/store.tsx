@@ -537,7 +537,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (patch.notes !== undefined) dbPatch.notes = patch.notes;
         const { error } = await supabase
           .from("projects")
-          .update(dbPatch)
+          .update(dbPatch as any)
           .eq("id", projectId);
         if (error) {
           // revert
