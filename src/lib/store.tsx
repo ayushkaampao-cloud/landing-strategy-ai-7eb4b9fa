@@ -799,19 +799,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [updateConceptSection],
   );
 
-  const deleteProject = useCallback((projectId: string) => {
+  const deleteProject = useCallback(async (projectId: string) => {
+    if (dataRef.current.user) {
+      const { error } = await supabase.from("projects").delete().eq("id", projectId);
+      if (error) throw error;
+    }
     setData((d) => ({
       ...d,
       projects: d.projects.filter((p) => p.id !== projectId),
       concepts: d.concepts.filter((c) => c.projectId !== projectId),
       products: d.products.filter((pr) => pr.id !== projectId),
     }));
-    if (dataRef.current.user) {
-      void supabase.from("projects").delete().eq("id", projectId);
-    }
   }, []);
 
-  const deleteWorkspace = useCallback((workspaceId: string) => {
+  const deleteWorkspace = useCallback(async (workspaceId: string) => {
+    if (dataRef.current.user) {
+      const { error } = await supabase.from("brands").delete().eq("id", workspaceId);
+      if (error) throw error;
+    }
     setData((d) => {
       const projs = d.projects.filter((p) => p.workspaceId === workspaceId);
       const projIds = projs.map((p) => p.id);
@@ -819,9 +824,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return {
         ...d,
         workspaces: remaining,
-        products: d.products.filter(
-          (pr) => !projIds.includes(pr.id),
-        ),
+        products: d.products.filter((pr) => !projIds.includes(pr.id)),
         projects: d.projects.filter((p) => p.workspaceId !== workspaceId),
         concepts: d.concepts.filter((c) => !projIds.includes(c.projectId)),
         activeWorkspaceId:
@@ -830,9 +833,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : d.activeWorkspaceId,
       };
     });
-    if (dataRef.current.user) {
-      void supabase.from("brands").delete().eq("id", workspaceId);
-    }
   }, []);
 
   const activeWorkspace = useMemo(
