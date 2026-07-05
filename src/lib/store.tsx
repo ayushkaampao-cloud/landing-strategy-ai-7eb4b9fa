@@ -117,6 +117,7 @@ interface StoreContextValue extends AppData {
   getImages: (conceptId: string) => GeneratedImagePreview[];
   saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => void;
   getProductImages: (projectId: string) => ProductImageRef[];
+  loadProductImages: (projectId: string) => Promise<ProductImageRef[]>;
   saveProductImages: (projectId: string, imgs: ProductImageRef[]) => void;
   getProductImageCount: (projectId: string) => number;
   getVisualProfile: (projectId: string) => ProductVisualProfile | null;
