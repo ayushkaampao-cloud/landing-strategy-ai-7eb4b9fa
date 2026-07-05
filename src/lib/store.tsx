@@ -1055,6 +1055,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setActiveWorkspace,
     createProduct,
     createProject,
+    updateProjectBrief,
+    updateWorkspaceDescription,
     saveConcepts,
     saveConceptsAsync,
     updateConceptSection,
