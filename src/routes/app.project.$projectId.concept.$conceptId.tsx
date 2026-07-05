@@ -785,9 +785,64 @@ function ConceptDetail() {
                 {regenerating ? "Regenerating…" : "↻ Regenerate this concept"}
               </button>
             </div>
+
+            <div className="space-y-2 pt-4 border-t border-border mt-4">
+              <div className="mono-tag text-muted-foreground mb-1">Share</div>
+              {!concept.shareToken ? (
+                <button
+                  onClick={handleSharePreview}
+                  disabled={shareBusy}
+                  className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted disabled:opacity-60"
+                >
+                  {shareBusy ? "Creating link…" : "Share preview"}
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={handleCopyShareLink}
+                    className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted"
+                  >
+                    Copy link
+                  </button>
+                  <button
+                    onClick={() => setDisableShareOpen(true)}
+                    disabled={shareBusy}
+                    className="w-full h-9 text-[12px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-60"
+                  >
+                    Disable link
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </aside>
       </div>
+      <AlertDialog
+        open={disableShareOpen}
+        onOpenChange={(v) => !shareBusy && setDisableShareOpen(v)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable share link?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The public preview will stop working. You can create a new link
+              later, but it will have a different URL.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={shareBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDisableShare();
+              }}
+              disabled={shareBusy}
+            >
+              {shareBusy ? "Disabling…" : "Disable link"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
