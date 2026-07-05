@@ -11,7 +11,16 @@ import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, ProductImageRef, SectionProps } from "@/types";
 import { resolveThemePalette } from "@/lib/theme/palette";
-import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
   component: ConceptDetail,
