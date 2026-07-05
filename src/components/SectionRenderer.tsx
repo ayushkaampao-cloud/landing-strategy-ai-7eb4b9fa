@@ -589,7 +589,7 @@ function ComparisonSection({ ctx }: { ctx: SectionCtx }) {
                     ? {
                         background: theme.primary,
                         color: primaryText,
-                        boxShadow: `0 20px 40px -20px ${withAlpha(theme.primary, 0.5)}`,
+                        boxShadow: `0 10px 30px -15px ${withAlpha(theme.primary, 0.35)}`,
                       }
                     : {
                         background: theme.surface,
