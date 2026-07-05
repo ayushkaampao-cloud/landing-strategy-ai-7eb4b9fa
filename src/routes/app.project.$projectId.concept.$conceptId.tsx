@@ -386,7 +386,11 @@ function ConceptDetail() {
         }),
       });
       clearInterval(stepTimer);
-      if (!res.ok) throw new Error((await res.text()) || "Element generation failed");
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        console.error("[elements] api error:", res.status, detail);
+        throw new Error("Content generation is temporarily unavailable — please try again in a moment.");
+      }
       const data = (await res.json()) as LandingPageElements;
 
       saveElements(conceptId, data);
