@@ -1005,6 +1005,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [bump],
   );
 
+  const loadProductImages = useCallback(
+    async (projectId: string): Promise<ProductImageRef[]> => {
+      if (!dataRef.current.user) return dataRef.current.productImages[projectId] ?? [];
+      const { data: row, error } = await supabase
+        .from("product_visual_profiles")
+        .select("source_image_urls")
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (error) {
+        console.error("loadProductImages db", error);
+        return dataRef.current.productImages[projectId] ?? [];
+      }
+      const imgs = ((row?.source_image_urls as any) ?? []) as ProductImageRef[];
+      setData((d) => ({
+        ...d,
+        productImages: { ...d.productImages, [projectId]: imgs },
+        productImageCount: { ...d.productImageCount, [projectId]: imgs.length },
+      }));
+      return imgs;
+    },
+    [],
+  );
+
   const saveVisualProfile = useCallback(
     (projectId: string, p: ProductVisualProfile | null) => {
       setData((d) => ({ ...d, visualProfile: { ...d.visualProfile, [projectId]: p } }));
