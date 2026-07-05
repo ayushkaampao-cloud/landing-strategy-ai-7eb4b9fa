@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as PreviewShareTokenRouteImport } from './routes/preview.$shareToken'
 import { Route as AppProjectsRouteImport } from './routes/app.projects'
 import { Route as AppNewRouteImport } from './routes/app.new'
 import { Route as AppAccountRouteImport } from './routes/app.account'
@@ -59,6 +60,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const PreviewShareTokenRoute = PreviewShareTokenRouteImport.update({
+  id: '/preview/$shareToken',
+  path: '/preview/$shareToken',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppProjectsRoute = AppProjectsRouteImport.update({
   id: '/projects',
@@ -184,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/app/account': typeof AppAccountRoute
   '/app/new': typeof AppNewRoute
   '/app/projects': typeof AppProjectsRoute
+  '/preview/$shareToken': typeof PreviewShareTokenRoute
   '/app/': typeof AppIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -210,6 +217,7 @@ export interface FileRoutesByTo {
   '/app/account': typeof AppAccountRoute
   '/app/new': typeof AppNewRoute
   '/app/projects': typeof AppProjectsRoute
+  '/preview/$shareToken': typeof PreviewShareTokenRoute
   '/app': typeof AppIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -238,6 +246,7 @@ export interface FileRoutesById {
   '/app/account': typeof AppAccountRoute
   '/app/new': typeof AppNewRoute
   '/app/projects': typeof AppProjectsRoute
+  '/preview/$shareToken': typeof PreviewShareTokenRoute
   '/app/': typeof AppIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -267,6 +276,7 @@ export interface FileRouteTypes {
     | '/app/account'
     | '/app/new'
     | '/app/projects'
+    | '/preview/$shareToken'
     | '/app/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -293,6 +303,7 @@ export interface FileRouteTypes {
     | '/app/account'
     | '/app/new'
     | '/app/projects'
+    | '/preview/$shareToken'
     | '/app'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -320,6 +331,7 @@ export interface FileRouteTypes {
     | '/app/account'
     | '/app/new'
     | '/app/projects'
+    | '/preview/$shareToken'
     | '/app/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -345,6 +357,7 @@ export interface RootRouteChildren {
   ApiGenerateImagesRoute: typeof ApiGenerateImagesRoute
   ApiGenerateStrategiesRoute: typeof ApiGenerateStrategiesRoute
   ApiResearchProjectRoute: typeof ApiResearchProjectRoute
+  PreviewShareTokenRoute: typeof PreviewShareTokenRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
 }
@@ -385,6 +398,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/preview/$shareToken': {
+      id: '/preview/$shareToken'
+      path: '/preview/$shareToken'
+      fullPath: '/preview/$shareToken'
+      preLoaderRoute: typeof PreviewShareTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/app/projects': {
       id: '/app/projects'
@@ -573,6 +593,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiGenerateImagesRoute: ApiGenerateImagesRoute,
   ApiGenerateStrategiesRoute: ApiGenerateStrategiesRoute,
   ApiResearchProjectRoute: ApiResearchProjectRoute,
+  PreviewShareTokenRoute: PreviewShareTokenRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
 }
