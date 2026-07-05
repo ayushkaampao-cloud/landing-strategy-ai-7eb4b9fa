@@ -531,13 +531,15 @@ function ConceptDetail() {
             </div>
             <div style={{ background: theme.background }}>
               {concept.schema.sections.map((s) => {
-                const img = imageBySection[s.id];
+                const isHeroWithUpload = s.type === "hero" && !!heroProductImage;
+                const img = displayImageBySection[s.id];
                 const activeUrl = img?.realUrl || img?.previewUrl || "";
                 const isPlaceholderImg = img && img.status === "placeholder" && !img.realUrl;
                 const isMissingUrl = !!img && !isPlaceholderImg && !activeUrl;
-                const showFailed = !!img && !isPlaceholderImg && (imgFailed[s.id] || isMissingUrl || img.status === "failed");
+                const showFailed = !isHeroWithUpload && !!img && !isPlaceholderImg && (imgFailed[s.id] || isMissingUrl || img.status === "failed");
                 // Only pass the image into the section renderer when it will actually render.
                 const passImage = !!img && !isPlaceholderImg && !showFailed ? img : undefined;
+
                 return (
                   <div key={s.id} id={`section-${s.id}`}>
                     <SectionRenderer
