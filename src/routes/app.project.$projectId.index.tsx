@@ -98,9 +98,18 @@ function ProjectGallery() {
       </TopBar>
       <div className="p-8 max-w-7xl">
         <div className="mb-2 mono-tag text-muted-foreground">Project</div>
-        <h1 className="text-3xl font-semibold tracking-tight mb-1">
-          {project.projectName}
-        </h1>
+        <div className="flex items-start justify-between gap-4 mb-1">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            {project.projectName}
+          </h1>
+          <Link
+            to="/app/project/$projectId/edit"
+            params={{ projectId }}
+            className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface hover:border-foreground/30 shrink-0"
+          >
+            Edit project
+          </Link>
+        </div>
         <p className="text-muted-foreground text-sm mb-8">
           {product?.name} · 5 strategic directions · {ordered.reduce((n, c) => n + c.schema.sections.length, 0)} sections total
         </p>
