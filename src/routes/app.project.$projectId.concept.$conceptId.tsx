@@ -45,6 +45,7 @@ function ConceptDetail() {
     saveElements,
     getImages,
     saveImages,
+    updateImageForSection,
     getProductImageCount,
     getVisualProfile,
     setActiveWorkspace,
