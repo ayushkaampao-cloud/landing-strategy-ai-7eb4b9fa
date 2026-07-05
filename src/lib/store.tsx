@@ -1222,6 +1222,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     saveElements,
     getImages: (id) => data.images[id] ?? [],
     saveImages,
+    updateImageForSection,
     getProductImages: (id) => data.productImages[id] ?? [],
     saveProductImages,
     loadProductImages,
