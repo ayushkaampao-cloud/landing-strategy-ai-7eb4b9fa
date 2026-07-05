@@ -237,7 +237,11 @@ function ConceptDetail() {
             onlyFamily: concept.templateFamily,
           }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          const detail = await res.text().catch(() => "");
+          console.error("[strategies] api error:", res.status, detail);
+          throw new Error("provider_unavailable");
+        }
         const data = (await res.json()) as { concepts: LandingPageConcept[] };
         const fresh = data.concepts[0];
         if (!fresh) throw new Error("No concept returned");
