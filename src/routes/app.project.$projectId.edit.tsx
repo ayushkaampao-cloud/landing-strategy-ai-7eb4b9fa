@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { ProductImageUploader } from "@/components/ProductImageUploader";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import type { ProductImageRef, ProjectGoal } from "@/types";
 
@@ -27,6 +27,7 @@ function EditProject() {
     products,
     workspaces,
     getProductImages,
+    loadProductImages,
     saveProductImages,
     saveVisualProfile,
     updateProjectBrief,
@@ -62,7 +63,25 @@ function EditProject() {
   const [savingBrief, setSavingBrief] = useState(false);
 
   const [images, setImages] = useState<ProductImageRef[]>(storedImages);
+  const [imagesLoaded, setImagesLoaded] = useState(storedImages.length > 0);
   const [savingPhotos, setSavingPhotos] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadProductImages(projectId)
+      .then((imgs) => {
+        if (cancelled) return;
+        setImages(imgs);
+        setImagesLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setImagesLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   if (!project || !workspace) {
     return (
@@ -97,14 +116,18 @@ function EditProject() {
   };
 
   const submitPhotos = async () => {
+    if (!imagesLoaded) {
+      toast.message("Photos are still loading — try again in a moment.");
+      return;
+    }
     const changed = !sameImageSet(images, storedImages);
+    if (!changed) {
+      toast.message("No photo changes to save");
+      return;
+    }
     setSavingPhotos(true);
     try {
       saveProductImages(projectId, images);
-      if (!changed) {
-        toast.message("No photo changes to save");
-        return;
-      }
       if (images.length === 0) {
         saveVisualProfile(projectId, null);
         toast.success("Photos cleared");
@@ -243,12 +266,16 @@ function EditProject() {
               theme is refreshed the next time you re-run research or regenerate a concept.
             </p>
           </div>
-          <ProductImageUploader images={images} onChange={setImages} optional />
+          {imagesLoaded ? (
+            <ProductImageUploader images={images} onChange={setImages} optional />
+          ) : (
+            <div className="text-xs text-muted-foreground">Loading existing photos…</div>
+          )}
           <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setImages(storedImages)}
-              disabled={savingPhotos || sameImageSet(images, storedImages)}
+              disabled={savingPhotos || !imagesLoaded || sameImageSet(images, storedImages)}
               className="mono-tag px-3 py-1.5 rounded-md border border-border bg-background hover:border-foreground/30 disabled:opacity-40"
             >
               Reset
@@ -256,7 +283,7 @@ function EditProject() {
             <button
               type="button"
               onClick={submitPhotos}
-              disabled={savingPhotos}
+              disabled={savingPhotos || !imagesLoaded}
               className="inline-flex items-center h-10 px-5 bg-ink text-background text-sm font-medium rounded-md disabled:opacity-50"
             >
               {savingPhotos ? "Saving & re-analyzing…" : "Save photos"}
