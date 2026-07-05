@@ -63,7 +63,25 @@ function EditProject() {
   const [savingBrief, setSavingBrief] = useState(false);
 
   const [images, setImages] = useState<ProductImageRef[]>(storedImages);
+  const [imagesLoaded, setImagesLoaded] = useState(storedImages.length > 0);
   const [savingPhotos, setSavingPhotos] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadProductImages(projectId)
+      .then((imgs) => {
+        if (cancelled) return;
+        setImages(imgs);
+        setImagesLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setImagesLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   if (!project || !workspace) {
     return (
