@@ -318,37 +318,6 @@ function ConceptDetail() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const research = getResearch(projectId);
-  const elements = useMemo(
-    () => getElements(conceptId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [conceptId, elementsVersion],
-  );
-  const images = useMemo(
-    () => getImages(conceptId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [conceptId, imagesVersion],
-  );
-  const imageBySection = useMemo(() => {
-    const map: Record<string, GeneratedImagePreview> = {};
-    images.forEach((i) => (map[i.sectionId] = i));
-    return map;
-  }, [images]);
-
-  const productImageCount = getProductImageCount(projectId);
-  const visualProfile = getVisualProfile(projectId);
-  // Brand theme palette. Prefer the palette generated server-side in classify-project;
-  // fall back to a client-side derivation using the same category/color rules so old
-  // projects (or ones where classification hasn't stored a palette yet) still render on-brand.
-  const theme = useMemo(() => {
-    const stored = research?.classification?.themePalette;
-    if (stored) return stored;
-    return resolveThemePalette({
-      category: research?.classification?.category,
-      visibleColors: visualProfile?.visibleColors,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [research?.classification?.themePalette, research?.classification?.category, visualProfile]);
   // generateRealImage only checks referenceImages.length > 0 to inject grounding
   // text, so a single placeholder is enough after refresh when the count > 0.
   const referenceImagesForReal: ProductImageRef[] =
