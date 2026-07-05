@@ -861,14 +861,27 @@ function DetailsSection({ ctx }: { ctx: SectionCtx }) {
 function CtaSection({ ctx }: { ctx: SectionCtx }) {
   const { theme, section: s } = ctx;
   const { E } = useEditables(ctx);
-  const primaryText = contrastText(theme.primary);
   return (
     <section
-      className="px-6 md:px-12 py-20 text-center"
-      style={{ background: theme.primary, color: primaryText }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{
+        background: theme.background,
+        color: theme.text,
+        borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}`,
+      }}
     >
-      <div className="max-w-3xl mx-auto">
-        <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-8 leading-tight">
+      <div
+        className="max-w-3xl mx-auto text-center p-10 md:p-14 rounded-2xl"
+        style={{
+          background: theme.surface,
+          border: `1px solid ${withAlpha(theme.primary, 0.12)}`,
+          boxShadow: `0 24px 48px -28px ${withAlpha(theme.primary, 0.25)}`,
+        }}
+      >
+        <h2
+          className="text-4xl md:text-5xl font-semibold tracking-tight mb-8 leading-tight"
+          style={{ color: theme.primary }}
+        >
           {E("title", "Add closing CTA headline")}
         </h2>
         <span
@@ -881,6 +894,7 @@ function CtaSection({ ctx }: { ctx: SectionCtx }) {
     </section>
   );
 }
+
 
 function GenericSection({ ctx }: { ctx: SectionCtx }) {
   const { theme, section: s } = ctx;
