@@ -45,7 +45,7 @@ function ProjectsList() {
               </div>
               <button
                 type="button"
-                onClick={onDeleteBrand}
+                onClick={() => setBrandDeleteOpen(true)}
                 className="mono-tag text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
                 title="Delete brand and all its projects"
               >
