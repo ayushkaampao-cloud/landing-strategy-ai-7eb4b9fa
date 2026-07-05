@@ -293,7 +293,7 @@ function HeroSection({ ctx }: { ctx: SectionCtx }) {
   return (
     <section
       className="px-6 md:px-12 py-14 md:py-20"
-      style={{ background: theme.background, color: theme.text }}
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="grid md:grid-cols-2 gap-10 items-center max-w-6xl mx-auto">
         <div>
@@ -383,8 +383,8 @@ function ProblemSolutionSection({ ctx }: { ctx: SectionCtx }) {
   const { E } = useEditables(ctx);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="grid md:grid-cols-2 gap-10 items-center max-w-6xl mx-auto">
         <div>
@@ -423,8 +423,8 @@ function FeatureGridSection({ ctx }: { ctx: SectionCtx }) {
   const { E, renderItem } = useEditables(ctx);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="max-w-6xl mx-auto">
         {(s.title || ctx.onEdit) && (
@@ -528,8 +528,8 @@ function LifestyleSection({ ctx }: { ctx: SectionCtx }) {
   const { E } = useEditables(ctx);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
@@ -565,8 +565,8 @@ function ComparisonSection({ ctx }: { ctx: SectionCtx }) {
   const primaryText = contrastText(theme.primary);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="max-w-5xl mx-auto">
         {(s.title || ctx.onEdit) && (
@@ -589,7 +589,7 @@ function ComparisonSection({ ctx }: { ctx: SectionCtx }) {
                     ? {
                         background: theme.primary,
                         color: primaryText,
-                        boxShadow: `0 20px 40px -20px ${withAlpha(theme.primary, 0.5)}`,
+                        boxShadow: `0 10px 30px -15px ${withAlpha(theme.primary, 0.35)}`,
                       }
                     : {
                         background: theme.surface,
@@ -686,8 +686,8 @@ function FaqSection({ ctx }: { ctx: SectionCtx }) {
   const { E, renderItem } = useEditables(ctx);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="max-w-3xl mx-auto">
         {(s.title || ctx.onEdit) && (
@@ -741,19 +741,36 @@ function OfferSection({ ctx }: { ctx: SectionCtx }) {
   const accentText = contrastText(theme.accent);
   return (
     <section
-      className="px-6 md:px-12 py-16 text-center"
-      style={{ background: theme.accent, color: accentText }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{
+        background: withAlpha(theme.accent, 0.08),
+        color: theme.text,
+        borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}`,
+      }}
     >
-      <div className="max-w-2xl mx-auto">
-        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-3">
+      <div
+        className="max-w-2xl mx-auto text-center p-10 md:p-12 rounded-2xl"
+        style={{
+          background: theme.surface,
+          border: `1px solid ${withAlpha(theme.accent, 0.25)}`,
+          boxShadow: `0 20px 40px -24px ${withAlpha(theme.accent, 0.3)}`,
+        }}
+      >
+        <h2
+          className="text-3xl md:text-4xl font-semibold tracking-tight mb-3"
+          style={{ color: theme.primary }}
+        >
           {E("title", "Add offer title")}
         </h2>
-        <p className="text-base opacity-90 mb-7 leading-relaxed">
+        <p
+          className="text-base mb-7 leading-relaxed"
+          style={{ color: theme.mutedText }}
+        >
           {E("subtitle", "Add offer subtitle", true)}
         </p>
         <span
           className="inline-flex items-center px-7 py-3.5 rounded-lg text-sm font-semibold"
-          style={{ background: theme.primary, color: contrastText(theme.primary) }}
+          style={{ background: theme.accent, color: accentText }}
         >
           {E("ctaLabel", "Add offer CTA")}
         </span>
@@ -762,13 +779,14 @@ function OfferSection({ ctx }: { ctx: SectionCtx }) {
   );
 }
 
+
 function GuaranteeSection({ ctx }: { ctx: SectionCtx }) {
   const { theme, section: s } = ctx;
   const { E } = useEditables(ctx);
   return (
     <section
       className="px-6 md:px-12 py-12"
-      style={{ background: theme.background, color: theme.text }}
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div
         className="max-w-3xl mx-auto flex items-start gap-5 p-6 rounded-xl"
@@ -814,8 +832,8 @@ function DetailsSection({ ctx }: { ctx: SectionCtx }) {
   const { E, renderBullets } = useEditables(ctx);
   return (
     <section
-      className="px-6 md:px-12 py-16"
-      style={{ background: theme.background, color: theme.text }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="grid md:grid-cols-2 gap-10 items-center max-w-6xl mx-auto">
         <div>
@@ -843,14 +861,27 @@ function DetailsSection({ ctx }: { ctx: SectionCtx }) {
 function CtaSection({ ctx }: { ctx: SectionCtx }) {
   const { theme, section: s } = ctx;
   const { E } = useEditables(ctx);
-  const primaryText = contrastText(theme.primary);
   return (
     <section
-      className="px-6 md:px-12 py-20 text-center"
-      style={{ background: theme.primary, color: primaryText }}
+      className="px-6 md:px-12 py-20 md:py-24"
+      style={{
+        background: theme.background,
+        color: theme.text,
+        borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}`,
+      }}
     >
-      <div className="max-w-3xl mx-auto">
-        <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-8 leading-tight">
+      <div
+        className="max-w-3xl mx-auto text-center p-10 md:p-14 rounded-2xl"
+        style={{
+          background: theme.surface,
+          border: `1px solid ${withAlpha(theme.primary, 0.12)}`,
+          boxShadow: `0 24px 48px -28px ${withAlpha(theme.primary, 0.25)}`,
+        }}
+      >
+        <h2
+          className="text-4xl md:text-5xl font-semibold tracking-tight mb-8 leading-tight"
+          style={{ color: theme.primary }}
+        >
           {E("title", "Add closing CTA headline")}
         </h2>
         <span
@@ -864,13 +895,14 @@ function CtaSection({ ctx }: { ctx: SectionCtx }) {
   );
 }
 
+
 function GenericSection({ ctx }: { ctx: SectionCtx }) {
   const { theme, section: s } = ctx;
   const { E } = useEditables(ctx);
   return (
     <section
       className="px-6 md:px-12 py-14"
-      style={{ background: theme.background, color: theme.text }}
+      style={{ background: theme.background, color: theme.text, borderTop: `1px solid ${withAlpha(theme.primary, 0.06)}` }}
     >
       <div className="max-w-3xl mx-auto">
         <h2

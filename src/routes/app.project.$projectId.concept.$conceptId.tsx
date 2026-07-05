@@ -47,6 +47,8 @@ function ConceptDetail() {
     saveImages,
     updateImageForSection,
     getProductImageCount,
+    getProductImages,
+
     getVisualProfile,
     setActiveWorkspace,
     enableConceptShare,
@@ -105,6 +107,34 @@ function ConceptDetail() {
   }, [images]);
   const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
+  // If the project uploaded product photos, use the first one directly as the
+  // hero image instead of an AI-generated one. Other sections still use AI.
+  const heroProductImage = useMemo(() => {
+    const imgs = getProductImages(projectId);
+    return imgs[0]?.dataUrl ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, productImageCount]);
+  const displayImageBySection = useMemo(() => {
+    if (!concept) return imageBySection;
+    if (!heroProductImage) return imageBySection;
+    const map = { ...imageBySection };
+    concept.schema.sections.forEach((s) => {
+      if (s.type === "hero") {
+        map[s.id] = {
+          sectionId: s.id,
+          imagePrompt: "Uploaded product photo",
+          imageStyle: "uploaded",
+          imageMode: "product_packshot",
+          previewUrl: heroProductImage,
+          realUrl: heroProductImage,
+          status: "real",
+        };
+      }
+    });
+
+    return map;
+  }, [concept, imageBySection, heroProductImage]);
+
   const theme = useMemo(() => {
     const stored = research?.classification?.themePalette;
     if (stored) return stored;
@@ -114,6 +144,7 @@ function ConceptDetail() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [research?.classification?.themePalette, research?.classification?.category, visualProfile]);
+
 
   if (!project || !concept || !product || !workspace) {
     return (
@@ -320,11 +351,15 @@ function ConceptDetail() {
   };
 
   async function handleGenerateRealImage(sectionId: string) {
+    const section = concept?.schema.sections.find((s) => s.id === sectionId);
+    if (section?.type === "hero" && heroProductImage) return;
     const img = imageBySection[sectionId];
     if (!img) return;
+
     setRealGenerating((s) => ({ ...s, [sectionId]: true }));
     try {
-      const section = concept?.schema.sections.find((s) => s.id === sectionId);
+      // section resolved above
+
       const res = await fetch("/api/generate-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -420,23 +455,32 @@ function ConceptDetail() {
       concept!.schema.sections.forEach((s) => {
         negBySection[s.id] = s.negativePrompt;
       });
+      const heroSectionIds = new Set(
+        concept!.schema.sections.filter((s) => s.type === "hero").map((s) => s.id),
+      );
+      const skipHero = !!heroProductImage;
       const items = [
-        ...elements.hero.imagePrompts.map((p, i) => ({
-          sectionId: `hero-${i}`,
-          imagePrompt: p,
-          imageStyle: elements.globalStyle.imageStyle,
-          negativePrompt: undefined as string | undefined,
-        })),
-        ...elements.sections.flatMap((sec) =>
-          (sec.imagePrompts ?? []).map((p) => ({
-            sectionId: sec.sectionId,
+        ...elements.hero.imagePrompts
+          .map((p, i) => ({
+            sectionId: `hero-${i}`,
             imagePrompt: p,
             imageStyle: elements.globalStyle.imageStyle,
-            imageMode: sec.imageMode,
-            negativePrompt: sec.negativePrompt ?? negBySection[sec.sectionId],
-          })),
+            negativePrompt: undefined as string | undefined,
+          }))
+          .filter(() => !skipHero),
+        ...elements.sections.flatMap((sec) =>
+          (sec.imagePrompts ?? [])
+            .filter(() => !(skipHero && heroSectionIds.has(sec.sectionId)))
+            .map((p) => ({
+              sectionId: sec.sectionId,
+              imagePrompt: p,
+              imageStyle: elements.globalStyle.imageStyle,
+              imageMode: sec.imageMode,
+              negativePrompt: sec.negativePrompt ?? negBySection[sec.sectionId],
+            })),
         ),
       ];
+
       const res = await fetch("/api/generate-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -500,13 +544,15 @@ function ConceptDetail() {
             </div>
             <div style={{ background: theme.background }}>
               {concept.schema.sections.map((s) => {
-                const img = imageBySection[s.id];
+                const isHeroWithUpload = s.type === "hero" && !!heroProductImage;
+                const img = displayImageBySection[s.id];
                 const activeUrl = img?.realUrl || img?.previewUrl || "";
                 const isPlaceholderImg = img && img.status === "placeholder" && !img.realUrl;
                 const isMissingUrl = !!img && !isPlaceholderImg && !activeUrl;
-                const showFailed = !!img && !isPlaceholderImg && (imgFailed[s.id] || isMissingUrl || img.status === "failed");
+                const showFailed = !isHeroWithUpload && !!img && !isPlaceholderImg && (imgFailed[s.id] || isMissingUrl || img.status === "failed");
                 // Only pass the image into the section renderer when it will actually render.
                 const passImage = !!img && !isPlaceholderImg && !showFailed ? img : undefined;
+
                 return (
                   <div key={s.id} id={`section-${s.id}`}>
                     <SectionRenderer
@@ -539,7 +585,9 @@ function ConceptDetail() {
                         }}
                       >
                         <span className="mono-tag">
-                          {img.status === "real"
+                          {isHeroWithUpload
+                            ? "Using uploaded product photo"
+                            : img.status === "real"
                             ? "Real image · AI-generated"
                             : img.status === "failed"
                               ? "Generation failed — using branded placeholder"
@@ -561,7 +609,7 @@ function ConceptDetail() {
                               Retry image
                             </button>
                           )}
-                          {img.status !== "real" && (
+                          {!isHeroWithUpload && img.status !== "real" && (
                             <button
                               type="button"
                               onClick={() => handleGenerateRealImage(s.id)}
@@ -572,6 +620,7 @@ function ConceptDetail() {
                               {realGenerating[s.id] ? "Generating…" : "Generate real image"}
                             </button>
                           )}
+
                           <span className="truncate max-w-[40%]" title={img.imagePrompt}>
                             {img.imagePrompt}
                           </span>
@@ -800,7 +849,7 @@ function ConceptDetail() {
                   try {
                     const { skipped } = await downloadConceptZip({
                       concept,
-                      images,
+                      images: Object.values(displayImageBySection),
                       project,
                       workspace,
                       onProgress: (done, total) => setDlProgress({ done, total }),
