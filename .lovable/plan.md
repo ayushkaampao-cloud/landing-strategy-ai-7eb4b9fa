@@ -1,46 +1,55 @@
-# Diagnosis: "No brand yet" / "Concept not found" after the last change
+## Diagnosis
 
-Before proposing any code fix, here is what I actually found by inspecting the live preview and code.
+### Bug 1 — "Generate real image" per-section button does nothing
 
-## 1. What the last change actually touched in the concept route
+The two entry points call **completely different backends**:
 
-The last change to `src/routes/app.project.$projectId.concept.$conceptId.tsx` was scoped to the regenerate error handler around lines 268–280. Concretely:
+- **Sidebar "Generate images" button** (`handleGenerateImages`, concept route line 412) → POST `/api/generate-images` → Lovable AI Gateway (`google/gemini-3.1-flash-image`) → uploads to Supabase storage → returns signed URL. Server-side, reliable. **This is the one that works.**
+- **Per-section "Generate real image" button** (`handleGenerateRealImage`, concept route line 337) → `generateRealImage()` in `src/lib/puter.ts` → `window.puter.ai.txt2img(...)` loaded from `https://js.puter.com/v2/` (script tag in `__root.tsx` line 110). **This is the broken path.**
 
-- The `catch (err)` block in `handleRegenerate` was cleaned up to:
-  - `console.error("[regenerate] error:", err)` (technical details to console only)
-  - `toast.error("Content generation is temporarily unavailable — please try again in a moment. Your current concept is unchanged.")` (clean user-facing message)
-  - a `void previousConcept` marker note; no navigation.
-- Nothing else in that file — no data fetching, no loader, no auth logic, no store code — was modified.
+The Puter path fails silently for users because `puter.ai.txt2img` requires a Puter.com account/session; without one it opens a blocked auth popup or the promise never resolves, so the click just spins. The `preview.$shareToken.tsx` route has no generate button at all — it's read-only — so the "elsewhere it works" is really the sidebar bulk button on the same page, which uses the working gateway path.
 
-So the file change is a message-only edit inside a `try/catch` that only runs when the user clicks "Regenerate". It cannot, by itself, make brands disappear or make a concept unfindable on initial load.
+There is no reason to keep two different image backends. The fix is to route the per-section button through `/api/generate-images` for a single item, matching the bulk path.
 
-## 2. What is actually happening right now in the preview
+### Bug 2 — Generating one section wipes another section's image
 
-I inspected the live preview directly. Result:
+`handleGenerateRealImage` (line 349) rebuilds the whole image array from a memoized closure:
 
-- The signed-in user is `tester@landing-strategy-ai.app` (session token present in `localStorage` under `sb-yheixldvdvyyifricrqz-auth-token`).
-- The sidebar renders workspaces just fine: `H2QUA`, `Northlight Coffee`, `Fjord Skin Studio`, `Ledgerloop` (each appearing multiple times — that's a separate render/dedup smell, not the reported bug).
-- `/app/account` renders normally with the workspaces list and "H2QUA — ACTIVE".
-- Concept-scoped `localStorage` keys for `0920c160-…` (the concept in the URL) exist: `lpai:elements:0920c160…`, `lpai:images:0920c160…`.
-- The tab that is parked on the concept URL does not respond to JS snippets — it times out, which means the page's JS is either stuck in a render loop or has thrown during render and the error boundary is holding an empty shell.
-- Dev-server logs show no errors related to this route — only a benign Vite deprecation warning about `inputValidator` in `preview.functions.ts`.
+```ts
+const next = images.map((i) =>
+  i.sectionId === sectionId ? { ...i, realUrl: url, status: "real" } : i,
+);
+saveImages(conceptId, next);
+```
 
-Interpretation: this is **not** "all data is gone" and it is **not** a session/auth wipe. Brands and projects are present and reachable; the account page proves it. What's broken is specifically the render of the concept detail route in that one tab — consistent with a client-side render-time throw (option A of the three you listed), not a data-loss or auth event.
+`images` is captured from the render that started the request. `saveImages` in `src/lib/store.tsx` line 929 then does a **delete-all-then-reinsert** against `image_previews` for the concept's element row (`.delete().eq("element_id", elemId)` → `.insert(rows)`). Two consequences:
 
-The most likely cause is not the toast edit itself but something the same edit-pass touched around it — e.g. how `previousConcept` is captured, or a code path in the regenerate flow / `getElements`/`getResearch` selectors — that now throws during render for this specific concept. "No brand yet" appears when `activeWorkspace` is momentarily undefined during a re-render that then throws before hydration completes, which is why the sidebar text can flash that fallback even though the workspace list itself is populated.
+1. **Race between concurrent per-section clicks:** if section A is still generating when B finishes, B writes its stale snapshot (with A pre-update) and overwrites A's just-saved `realUrl`. Same on the DB (last delete-insert wins).
+2. **Race with the bulk "Generate images" button:** it also calls `saveImages(conceptId, data.previews)` with a fresh Gateway response and clobbers per-section `realUrl`s already saved.
 
-## 3. Console / server logs at the moment of failure
+So it's both: the client state slot is per-concept (not per-section) and the DB write is a full replace. Nothing is actually keyed per section id at the write level.
 
-- Browser console: no errors currently reported (`code--read_console_logs` returned no logs; `code--read_runtime_errors` returned none either). The concept-page tab is unresponsive to instrumentation, so any thrown error inside its render is being swallowed by the app's error boundary without a captured stack — same pattern as the earlier `/api/debug-llm` "Unavailable stack" incident.
-- Server logs (`vite` daemon logs): only the deprecation warning above. No 500s, no server-fn failures tied to the concept route.
+## Fix plan
 
-So the signal we need — the actual thrown error — is being eaten. To fix that safely, the next build-mode step should be:
+Frontend-only changes; no schema changes.
 
-## Proposed next step (build mode)
+1. **Unify the per-section trigger with the gateway path.**
+   In `src/routes/app.project.$projectId.concept.$conceptId.tsx`, rewrite `handleGenerateRealImage(sectionId)` to POST a single-item payload to `/api/generate-images` (same shape as `handleGenerateImages`, `items: [{ sectionId, imagePrompt, imageStyle, imageMode, negativePrompt }]`) instead of calling `generateRealImage` from `@/lib/puter`. Use the returned `previews[0].previewUrl` as the section's `realUrl`, set `status: "real"`. Drop the `generateRealImage` import and the unused `referenceImagesForReal` shim.
 
-1. Open `src/routes/app.project.$projectId.concept.$conceptId.tsx` and read the full current contents to diff against expectations around the regenerate catch block and the surrounding selectors (`getElements`, `getResearch`, `previousConcept`).
-2. Add a route-level `errorComponent` that renders the error message + stack to the DOM (not just the boundary fallback) so we can see the real throw instead of a blank "Concept not found" shell.
-3. Reload the concept URL, capture the real error, and fix that specific throw — likely a small guard around `previousConcept` or a selector that now returns `undefined` for this concept id.
-4. Leave the toast/message change in place; only touch what the captured error points at. Do not touch image generation, theme, or styling.
+2. **Make the save merge per-section instead of replacing the array.**
+   Add `updateImageForSection(conceptId, sectionId, patch)` to `src/lib/store.tsx`. It should:
+   - Read the latest images from `dataRef.current.images[conceptId]` (not a stale closure), apply the patch to the matching `sectionId` (insert if missing), setState, and bump.
+   - On the DB side, `upsert` a single `image_previews` row keyed by `(element_id, metadata->>sectionId)` — or simpler and safe: `delete().eq("element_id", elemId).eq("metadata->>sectionId", sectionId)` then insert just that one row. This removes the full delete-and-reinsert that causes cross-section wipes.
+   Use this new function inside `handleGenerateRealImage` (success and failure branches).
 
-If you approve, I'll switch to build mode and do exactly the four steps above.
+3. **Keep the existing `saveImages` for the bulk "Generate images" flow**, but before writing, merge the incoming previews with any existing entries that already have `realUrl` / `status === "real"` so the bulk regen doesn't blow away per-section real images. Concretely: for each incoming preview, if the current stored entry for that `sectionId` has `realUrl`, preserve `realUrl` and `status: "real"` on the merged object.
+
+4. **Guard against concurrent clicks on the same section** (defense in depth): the button is already `disabled={!!realGenerating[s.id]}`; keep that. No further concurrency lock needed once each write is per-section.
+
+5. **Remove `src/lib/puter.ts` usage** from the concept route. Leaving the file in place is fine; it's just no longer imported here. No change to `/api/generate-images` server route — it already accepts a single-item `items` array and writes each result independently.
+
+### Technical notes
+
+- No changes to `SectionRenderer`, theme code, or preview route.
+- No DB migration: `image_previews` already stores `metadata.sectionId`, which is what the new per-section delete/upsert filters on.
+- After the fix, the per-section button will use the same Gemini path as the bulk button, so behavior (quality, timing, storage bucket, signed-URL TTL) is consistent between the two entry points.
