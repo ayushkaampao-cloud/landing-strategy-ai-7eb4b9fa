@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { ProductImageUploader } from "@/components/ProductImageUploader";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import type { ProductImageRef, ProjectGoal } from "@/types";
 
