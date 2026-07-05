@@ -260,6 +260,23 @@ function ProjectGallery() {
           })}
         </div>
       </div>
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        entity="project"
+        name={project.projectName}
+        onConfirm={async () => {
+          try {
+            if (workspace) setActiveWorkspace(workspace.id);
+            await deleteProject(projectId);
+            toast.success("Project deleted.");
+            navigate({ to: "/app/projects" });
+          } catch (err) {
+            toast.error("Failed to delete project: " + (err as Error).message);
+            throw err;
+          }
+        }}
+      />
     </>
   );
 }
