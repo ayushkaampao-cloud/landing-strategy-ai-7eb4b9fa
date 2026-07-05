@@ -21,7 +21,7 @@ function sameImageSet(a: ProductImageRef[], b: ProductImageRef[]) {
 
 function EditProject() {
   const { projectId } = Route.useParams();
-  const navigate = useNavigate();
+  
   const {
     projects,
     products,
