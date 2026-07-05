@@ -133,7 +133,7 @@ function ProjectsList() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      onDeleteProject(p.id, p.projectName);
+                      setProjectToDelete({ id: p.id, name: p.projectName });
                     }}
                     className="absolute top-3 right-3 size-8 rounded-md grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
                     aria-label="Delete project"
