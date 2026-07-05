@@ -1110,6 +1110,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       data.elementSaveErrors[conceptId]?.[path],
     deleteProject,
     deleteWorkspace,
+    enableConceptShare,
+    disableConceptShare,
     version,
     legacyImportPending,
     importLegacyData,
