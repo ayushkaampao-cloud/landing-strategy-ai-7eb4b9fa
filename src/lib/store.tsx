@@ -253,6 +253,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         id: r.id,
         projectId: r.project_id,
         createdAt: r.created_at,
+        shareToken: (r.share_token as string | null) ?? null,
       }));
       conceptIds = concepts.map((c) => c.id);
     }
