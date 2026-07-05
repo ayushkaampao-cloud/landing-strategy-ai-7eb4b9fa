@@ -9,7 +9,7 @@ import { VisualProfileSummary } from "@/components/VisualProfileSummary";
 import { storage } from "@/lib/storage";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, ProductImageRef, SectionProps } from "@/types";
+import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, SectionProps } from "@/types";
 import { resolveThemePalette } from "@/lib/theme/palette";
 import { downloadConceptZip } from "@/lib/downloadConceptZip";
 import {
