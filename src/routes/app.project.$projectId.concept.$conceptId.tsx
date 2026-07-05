@@ -10,6 +10,7 @@ import { storage } from "@/lib/storage";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, ProductImageRef, SectionProps } from "@/types";
+import { resolveThemePalette } from "@/lib/theme/palette";
 
 export const Route = createFileRoute("/app/project/$projectId/concept/$conceptId")({
   component: ConceptDetail,
@@ -233,6 +234,18 @@ function ConceptDetail() {
 
   const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
+  // Brand theme palette. Prefer the palette generated server-side in classify-project;
+  // fall back to a client-side derivation using the same category/color rules so old
+  // projects (or ones where classification hasn't stored a palette yet) still render on-brand.
+  const theme = useMemo(() => {
+    const stored = research?.classification?.themePalette;
+    if (stored) return stored;
+    return resolveThemePalette({
+      category: research?.classification?.category,
+      visibleColors: visualProfile?.visibleColors,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [research?.classification?.themePalette, research?.classification?.category, visualProfile]);
   // generateRealImage only checks referenceImages.length > 0 to inject grounding
   // text, so a single placeholder is enough after refresh when the count > 0.
   const referenceImagesForReal: ProductImageRef[] =
@@ -399,19 +412,21 @@ function ConceptDetail() {
                 {meta.code}
               </div>
             </div>
-            <div>
+            <div style={{ background: theme.background }}>
               {concept.schema.sections.map((s) => {
                 const img = imageBySection[s.id];
-                const isPlaceholderImg = img && img.status === "placeholder" && !img.realUrl;
-                // Empty/missing url from a failed prior generation must not
-                // render <img src=""> — treat as the failed/retry branch.
                 const activeUrl = img?.realUrl || img?.previewUrl || "";
+                const isPlaceholderImg = img && img.status === "placeholder" && !img.realUrl;
                 const isMissingUrl = !!img && !isPlaceholderImg && !activeUrl;
                 const showFailed = !!img && !isPlaceholderImg && (imgFailed[s.id] || isMissingUrl || img.status === "failed");
+                // Only pass the image into the section renderer when it will actually render.
+                const passImage = !!img && !isPlaceholderImg && !showFailed ? img : undefined;
                 return (
                   <div key={s.id} id={`section-${s.id}`}>
                     <SectionRenderer
                       section={s}
+                      theme={theme}
+                      image={passImage}
                       onEdit={(field, value) =>
                         updateConceptSection(concept.id, s.id, { [field]: value } as Partial<SectionProps>)
                       }
@@ -429,101 +444,51 @@ function ConceptDetail() {
                       }
                     />
                     {img && (
-                      <div className="px-10 pb-10 -mt-6">
-                        <div className="rounded-lg overflow-hidden ring-soft">
-                          {isPlaceholderImg ? (
-                            <div className="aspect-[16/9] border-2 border-dashed border-border bg-surface-muted/60 grid place-items-center relative">
-                              {realGenerating[s.id] && (
-                                <div className="absolute inset-0 grid place-items-center bg-background/40 z-10">
-                                  <span className="mono-tag px-2 py-1 rounded bg-background/80 ring-soft">
-                                    Generating…
-                                  </span>
-                                </div>
-                              )}
-                              <div className="text-center px-6">
-                                <div className="mono-tag text-muted-foreground mb-2">
-                                  {img.imageMode ?? "image"}
-                                </div>
-                                <div className="text-sm font-medium mb-1">
-                                  {img.placeholderLabel ?? "Image placeholder"}
-                                </div>
-                                <div className="text-[11px] text-muted-foreground max-w-md mx-auto leading-snug">
-                                  No stock image shown for this slot. Click "Generate real image" below to render with product grounding.
-                                </div>
-                              </div>
-                            </div>
-                          ) : showFailed ? (
-                            <div className="aspect-[16/9] bg-neutral-200 dark:bg-neutral-800 grid place-items-center">
-                              <div className="text-center px-6">
-                                <div className="text-sm font-medium mb-1 text-muted-foreground">
-                                  Image didn't load
-                                </div>
-                                <div className="text-[11px] text-muted-foreground mb-3 max-w-xs mx-auto">
-                                  The preview host may be busy. Try again in a moment.
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setImgFailed((m) => ({ ...m, [s.id]: false }));
-                                    setImgRetry((m) => ({ ...m, [s.id]: (m[s.id] ?? 0) + 1 }));
-                                  }}
-                                  className="mono-tag px-3 py-1 rounded bg-ink text-background hover:opacity-90"
-                                >
-                                  Retry
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="relative">
-                              <img
-                                key={`${activeUrl}#${imgRetry[s.id] ?? 0}`}
-                                src={
-                                  activeUrl +
-                                  (imgRetry[s.id]
-                                    ? (activeUrl.includes("?") ? "&" : "?") + `_r=${imgRetry[s.id]}`
-                                    : "")
-                                }
-                                alt="Section preview"
-                                className={`w-full h-auto block ${realGenerating[s.id] ? "opacity-60" : ""}`}
-                                loading="lazy"
-                                onError={() => setImgFailed((m) => ({ ...m, [s.id]: true }))}
-                              />
-                              {realGenerating[s.id] && (
-                                <div className="absolute inset-0 grid place-items-center bg-background/40">
-                                  <span className="mono-tag px-2 py-1 rounded bg-background/80 ring-soft">
-                                    Generating…
-                                  </span>
-                                </div>
-                              )}
-                            </div>
+                      <div
+                        className="px-6 md:px-12 py-2 flex items-center justify-between text-[11px] gap-2 border-t"
+                        style={{
+                          background: theme.surface,
+                          color: theme.mutedText,
+                          borderColor: `${theme.primary}22`,
+                        }}
+                      >
+                        <span className="mono-tag">
+                          {img.status === "real"
+                            ? "Real image · AI-generated"
+                            : img.status === "failed"
+                              ? "Generation failed — using branded placeholder"
+                              : img.status === "placeholder"
+                                ? `Branded placeholder · ${img.imageMode ?? "image"}`
+                                : "Preview image · Generated"}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {showFailed && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setImgFailed((m) => ({ ...m, [s.id]: false }));
+                                setImgRetry((m) => ({ ...m, [s.id]: (m[s.id] ?? 0) + 1 }));
+                              }}
+                              className="mono-tag px-2 py-0.5 rounded"
+                              style={{ background: theme.primary, color: "#fff" }}
+                            >
+                              Retry image
+                            </button>
                           )}
-
-                          <div className="px-3 py-2 bg-surface-muted flex items-center justify-between text-[11px] text-muted-foreground gap-2">
-                            <span className="mono-tag">
-                              {img.status === "real"
-                                ? "Real image · AI-generated"
-                                : img.status === "failed"
-                                  ? "Generation failed — using placeholder"
-                                  : img.status === "placeholder"
-                                    ? `Placeholder · ${img.imageMode ?? "image"}`
-                                    : "Preview image · Generated"}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              {img.status !== "real" && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleGenerateRealImage(s.id)}
-                                  disabled={!!realGenerating[s.id]}
-                                  className="mono-tag px-2 py-0.5 rounded bg-ink text-background hover:opacity-90 disabled:opacity-50"
-                                >
-                                  {realGenerating[s.id] ? "Generating…" : "Generate real image"}
-                                </button>
-                              )}
-                              <span className="truncate max-w-[40%]" title={img.imagePrompt}>
-                                {img.imagePrompt}
-                              </span>
-                            </div>
-                          </div>
+                          {img.status !== "real" && (
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateRealImage(s.id)}
+                              disabled={!!realGenerating[s.id]}
+                              className="mono-tag px-2 py-0.5 rounded disabled:opacity-50"
+                              style={{ background: theme.accent, color: "#fff" }}
+                            >
+                              {realGenerating[s.id] ? "Generating…" : "Generate real image"}
+                            </button>
+                          )}
+                          <span className="truncate max-w-[40%]" title={img.imagePrompt}>
+                            {img.imagePrompt}
+                          </span>
                         </div>
                       </div>
                     )}
@@ -538,6 +503,7 @@ function ConceptDetail() {
         {/* Strategy rail — RIGHT */}
         <aside className="col-span-12 lg:col-span-4 xl:col-span-3 bg-background lg:sticky lg:top-14 lg:self-start lg:h-[calc(100vh-56px)] lg:overflow-y-auto">
           <div className={`h-1 w-full ${meta.accentDot}`} />
+
           <div className="p-7">
             <div className="flex items-center gap-2 mb-3">
               <span className={`mono-tag px-2 py-0.5 rounded ring-soft ${meta.accentClass.split(" ").filter(c => c.startsWith("text-")).join(" ")}`}>
