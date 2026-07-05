@@ -107,6 +107,8 @@ interface StoreContextValue extends AppData {
   getFieldSaveError: (conceptId: string, path: string) => string | undefined;
   deleteProject: (projectId: string) => Promise<void>;
   deleteWorkspace: (workspaceId: string) => Promise<void>;
+  enableConceptShare: (conceptId: string) => Promise<string>;
+  disableConceptShare: (conceptId: string) => Promise<void>;
   activeWorkspace: Workspace | null;
   getResearch: (projectId: string) => ProjectResearch | null;
   saveResearch: (projectId: string, r: ProjectResearch) => void;
