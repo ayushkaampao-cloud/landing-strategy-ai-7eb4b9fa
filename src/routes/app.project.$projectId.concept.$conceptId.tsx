@@ -37,6 +37,8 @@ function ConceptDetail() {
     getProductImageCount,
     getVisualProfile,
     setActiveWorkspace,
+    enableConceptShare,
+    disableConceptShare,
   } = useStore();
   // All hooks are declared unconditionally at the top of the component to
   // keep hook order stable across renders. A prior version declared
@@ -57,6 +59,8 @@ function ConceptDetail() {
   const [imgFailed, setImgFailed] = useState<Record<string, boolean>>({});
   const [imgRetry, setImgRetry] = useState<Record<string, number>>({});
   const [regenerating, setRegenerating] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [disableShareOpen, setDisableShareOpen] = useState(false);
   const regeneratingRef = useRef(false);
 
   const project = projects.find((p) => p.id === projectId);
