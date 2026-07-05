@@ -170,6 +170,39 @@ function ProjectsList() {
           </div>
         )}
       </div>
+      <ConfirmDeleteDialog
+        open={!!projectToDelete}
+        onOpenChange={(v) => !v && setProjectToDelete(null)}
+        entity="project"
+        name={projectToDelete?.name ?? ""}
+        onConfirm={async () => {
+          if (!projectToDelete) return;
+          try {
+            await deleteProject(projectToDelete.id);
+            toast.success("Project deleted.");
+          } catch (err) {
+            toast.error("Failed to delete project: " + (err as Error).message);
+            throw err;
+          }
+        }}
+      />
+      <ConfirmDeleteDialog
+        open={brandDeleteOpen}
+        onOpenChange={setBrandDeleteOpen}
+        entity="brand"
+        name={activeWorkspace?.name ?? ""}
+        onConfirm={async () => {
+          if (!activeWorkspace) return;
+          try {
+            await deleteWorkspace(activeWorkspace.id);
+            toast.success("Brand deleted.");
+            navigate({ to: "/app" });
+          } catch (err) {
+            toast.error("Failed to delete brand: " + (err as Error).message);
+            throw err;
+          }
+        }}
+      />
     </>
   );
 }
