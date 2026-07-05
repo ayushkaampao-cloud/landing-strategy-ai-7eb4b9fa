@@ -116,14 +116,18 @@ function EditProject() {
   };
 
   const submitPhotos = async () => {
+    if (!imagesLoaded) {
+      toast.message("Photos are still loading — try again in a moment.");
+      return;
+    }
     const changed = !sameImageSet(images, storedImages);
+    if (!changed) {
+      toast.message("No photo changes to save");
+      return;
+    }
     setSavingPhotos(true);
     try {
       saveProductImages(projectId, images);
-      if (!changed) {
-        toast.message("No photo changes to save");
-        return;
-      }
       if (images.length === 0) {
         saveVisualProfile(projectId, null);
         toast.success("Photos cleared");
