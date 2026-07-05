@@ -41,18 +41,34 @@ function ProjectGallery() {
           <span className="mono-tag text-muted-foreground">{project.goal}</span>
         </TopBar>
         <div className="p-8 max-w-4xl">
+          <Link
+            to="/app/projects"
+            onClick={() => workspace && setActiveWorkspace(workspace.id)}
+            className="mono-tag text-muted-foreground hover:text-foreground inline-block mb-3"
+          >
+            ← {workspace?.name ?? "All projects"}
+          </Link>
           <div className="mono-tag text-muted-foreground mb-2">Project</div>
           <div className="flex items-start justify-between gap-4 mb-1">
             <h1 className="text-3xl font-semibold tracking-tight">
               {project.projectName}
             </h1>
-            <Link
-              to="/app/project/$projectId/edit"
-              params={{ projectId }}
-              className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface hover:border-foreground/30 shrink-0"
-            >
-              Edit project
-            </Link>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                to="/app/project/$projectId/edit"
+                params={{ projectId }}
+                className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface hover:border-foreground/30"
+              >
+                Edit project
+              </Link>
+              <button
+                type="button"
+                onClick={() => setDeleteOpen(true)}
+                className="mono-tag px-3 py-1.5 rounded-md border border-border bg-surface text-muted-foreground hover:text-destructive hover:border-destructive/40"
+              >
+                Delete project
+              </button>
+            </div>
           </div>
           <p className="text-muted-foreground text-sm mb-10">
             {product?.name} · {project.goal}
