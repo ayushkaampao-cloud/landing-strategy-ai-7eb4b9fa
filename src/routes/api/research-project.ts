@@ -206,10 +206,12 @@ export const Route = createFileRoute("/api/research-project")({
           return Response.json(full);
         } catch (err) {
           console.error("[research] error:", err);
-          return Response.json(
-            { error: (err as Error).message || "Research failed" },
-            { status: 500 },
-          );
+          // Return 200 with fallback flag so the client can degrade gracefully
+          // without triggering the app-level error reporter / blank screen.
+          return Response.json({
+            fallback: true,
+            error: (err as Error).message || "Research failed",
+          });
         }
       },
     },

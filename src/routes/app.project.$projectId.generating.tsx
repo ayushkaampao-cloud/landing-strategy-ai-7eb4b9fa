@@ -85,12 +85,12 @@ function Generating() {
         body: JSON.stringify(researchPayload),
       });
       let research: ProjectResearch;
-      if (!rRes.ok) {
-        // Fallback synthetic research so the app never dead-ends
+      const rJson = rRes.ok ? ((await rRes.json()) as ProjectResearch & { fallback?: boolean }) : null;
+      if (!rRes.ok || rJson?.fallback) {
         research = fallbackResearch(project.sourceMode ?? "brief", product, workspace);
         setNote("Research fell back to brief-based inference (LLM unavailable).");
       } else {
-        research = (await rRes.json()) as ProjectResearch;
+        research = rJson as ProjectResearch;
         if (research.note) setNote(research.note);
       }
       saveResearch(project.id, research);
