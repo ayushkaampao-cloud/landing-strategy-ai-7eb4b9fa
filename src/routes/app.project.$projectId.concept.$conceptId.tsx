@@ -455,23 +455,32 @@ function ConceptDetail() {
       concept!.schema.sections.forEach((s) => {
         negBySection[s.id] = s.negativePrompt;
       });
+      const heroSectionIds = new Set(
+        concept!.schema.sections.filter((s) => s.type === "hero").map((s) => s.id),
+      );
+      const skipHero = !!heroProductImage;
       const items = [
-        ...elements.hero.imagePrompts.map((p, i) => ({
-          sectionId: `hero-${i}`,
-          imagePrompt: p,
-          imageStyle: elements.globalStyle.imageStyle,
-          negativePrompt: undefined as string | undefined,
-        })),
-        ...elements.sections.flatMap((sec) =>
-          (sec.imagePrompts ?? []).map((p) => ({
-            sectionId: sec.sectionId,
+        ...elements.hero.imagePrompts
+          .map((p, i) => ({
+            sectionId: `hero-${i}`,
             imagePrompt: p,
             imageStyle: elements.globalStyle.imageStyle,
-            imageMode: sec.imageMode,
-            negativePrompt: sec.negativePrompt ?? negBySection[sec.sectionId],
-          })),
+            negativePrompt: undefined as string | undefined,
+          }))
+          .filter(() => !skipHero),
+        ...elements.sections.flatMap((sec) =>
+          (sec.imagePrompts ?? [])
+            .filter(() => !(skipHero && heroSectionIds.has(sec.sectionId)))
+            .map((p) => ({
+              sectionId: sec.sectionId,
+              imagePrompt: p,
+              imageStyle: elements.globalStyle.imageStyle,
+              imageMode: sec.imageMode,
+              negativePrompt: sec.negativePrompt ?? negBySection[sec.sectionId],
+            })),
         ),
       ];
+
       const res = await fetch("/api/generate-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
