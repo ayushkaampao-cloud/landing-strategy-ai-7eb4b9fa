@@ -781,6 +781,43 @@ function ConceptDetail() {
                 {copied === "full" ? "Copied ✓" : "Copy full page content"}
               </button>
               <button
+                onClick={async () => {
+                  if (downloading) return;
+                  setDownloading(true);
+                  setDlProgress(null);
+                  try {
+                    const { skipped } = await downloadConceptZip({
+                      concept,
+                      images,
+                      project,
+                      workspace,
+                      onProgress: (done, total) => setDlProgress({ done, total }),
+                    });
+                    if (skipped.length > 0) {
+                      toast.success(
+                        `Downloaded — ${skipped.length} image${skipped.length === 1 ? "" : "s"} skipped`,
+                      );
+                    } else {
+                      toast.success("Downloaded");
+                    }
+                  } catch (err) {
+                    console.error("[download] error", err);
+                    toast.error("Download failed");
+                  } finally {
+                    setDownloading(false);
+                    setDlProgress(null);
+                  }
+                }}
+                disabled={downloading}
+                className="w-full h-9 text-[13px] font-medium border border-border rounded-md hover:bg-surface-muted disabled:opacity-60"
+              >
+                {downloading
+                  ? dlProgress && dlProgress.total > 0
+                    ? `Packaging ${dlProgress.done}/${dlProgress.total}…`
+                    : "Packaging…"
+                  : "Download everything"}
+              </button>
+              <button
                 onClick={regenerate}
                 disabled={regenerating}
                 className="w-full h-9 text-[12px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-60"
