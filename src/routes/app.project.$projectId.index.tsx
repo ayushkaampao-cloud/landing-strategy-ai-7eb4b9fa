@@ -1,9 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { FRAMEWORK_META, TEMPLATE_FAMILIES } from "@/lib/generator";
 import { VisualProfileSummary } from "@/components/VisualProfileSummary";
 import { GroundingBadge } from "@/components/GroundingBadge";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { useState } from "react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/project/$projectId/")({
   component: ProjectGallery,
@@ -11,9 +14,12 @@ export const Route = createFileRoute("/app/project/$projectId/")({
 
 function ProjectGallery() {
   const { projectId } = Route.useParams();
-  const { projects, products, concepts, getResearch, getProductImageCount, getVisualProfile } = useStore();
+  const navigate = useNavigate();
+  const { projects, products, concepts, workspaces, getResearch, getProductImageCount, getVisualProfile, deleteProject, setActiveWorkspace } = useStore();
   const project = projects.find((p) => p.id === projectId);
   const product = products.find((p) => p.id === project?.productId);
+  const workspace = workspaces.find((w) => w.id === project?.workspaceId);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const projectConcepts = concepts.filter((c) => c.projectId === projectId);
   const research = getResearch(projectId);
   const productImageCount = getProductImageCount(projectId);
