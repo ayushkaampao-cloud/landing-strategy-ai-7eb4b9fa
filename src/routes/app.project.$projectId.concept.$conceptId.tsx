@@ -266,7 +266,7 @@ function ConceptDetail() {
     } catch (err) {
       console.error("[regenerate] error:", err);
       toast.error(
-        `Regeneration failed: ${(err as Error).message}. Your current concept is unchanged.`,
+        "Content generation is temporarily unavailable — please try again in a moment. Your current concept is unchanged.",
       );
       // Ensure the previous concept is still visible; no navigation happens.
       void previousConcept;
