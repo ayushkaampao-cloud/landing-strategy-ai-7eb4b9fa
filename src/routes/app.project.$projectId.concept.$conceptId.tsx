@@ -11,6 +11,7 @@ import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, ProductImageRef, SectionProps } from "@/types";
 import { resolveThemePalette } from "@/lib/theme/palette";
+import { downloadConceptZip } from "@/lib/downloadConceptZip";
 import {
   AlertDialog,
   AlertDialogAction,
