@@ -351,8 +351,11 @@ function ConceptDetail() {
   };
 
   async function handleGenerateRealImage(sectionId: string) {
+    const section = concept?.schema.sections.find((s) => s.id === sectionId);
+    if (section?.type === "hero" && heroProductImage) return;
     const img = imageBySection[sectionId];
     if (!img) return;
+
     setRealGenerating((s) => ({ ...s, [sectionId]: true }));
     try {
       const section = concept?.schema.sections.find((s) => s.id === sectionId);
