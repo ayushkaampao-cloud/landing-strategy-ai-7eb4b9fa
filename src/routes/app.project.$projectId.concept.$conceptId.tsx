@@ -572,7 +572,9 @@ function ConceptDetail() {
                         }}
                       >
                         <span className="mono-tag">
-                          {img.status === "real"
+                          {isHeroWithUpload
+                            ? "Using uploaded product photo"
+                            : img.status === "real"
                             ? "Real image · AI-generated"
                             : img.status === "failed"
                               ? "Generation failed — using branded placeholder"
@@ -594,7 +596,7 @@ function ConceptDetail() {
                               Retry image
                             </button>
                           )}
-                          {img.status !== "real" && (
+                          {!isHeroWithUpload && img.status !== "real" && (
                             <button
                               type="button"
                               onClick={() => handleGenerateRealImage(s.id)}
@@ -605,6 +607,7 @@ function ConceptDetail() {
                               {realGenerating[s.id] ? "Generating…" : "Generate real image"}
                             </button>
                           )}
+
                           <span className="truncate max-w-[40%]" title={img.imagePrompt}>
                             {img.imagePrompt}
                           </span>
