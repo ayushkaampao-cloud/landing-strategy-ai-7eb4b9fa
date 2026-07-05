@@ -72,6 +72,21 @@ interface StoreContextValue extends AppData {
   setActiveWorkspace: (id: string) => void;
   createProduct: (input: Omit<Product, "id" | "createdAt">) => Product;
   createProject: (input: Omit<Project, "id" | "createdAt">) => Project;
+  updateProjectBrief: (
+    projectId: string,
+    patch: {
+      productDescription?: string;
+      keyFeatures?: string;
+      keyBenefits?: string;
+      goal?: Project["goal"];
+      tone?: string;
+      notes?: string;
+    },
+  ) => Promise<void>;
+  updateWorkspaceDescription: (
+    workspaceId: string,
+    description: string,
+  ) => Promise<void>;
   saveConcepts: (projectId: string, concepts: LandingPageConcept[]) => void;
   saveConceptsAsync: (
     projectId: string,
