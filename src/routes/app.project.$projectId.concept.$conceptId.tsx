@@ -36,6 +36,7 @@ function ConceptDetail() {
     saveImages,
     getProductImageCount,
     getVisualProfile,
+    setActiveWorkspace,
   } = useStore();
   // All hooks are declared unconditionally at the top of the component to
   // keep hook order stable across renders. A prior version declared
