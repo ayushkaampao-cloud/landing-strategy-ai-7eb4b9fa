@@ -5,7 +5,7 @@ import { FRAMEWORK_META, generateConceptsForProject } from "@/lib/generator";
 import { SectionRenderer } from "@/components/SectionRenderer";
 import { GroundingBadge } from "@/components/GroundingBadge";
 import { VisualProfileSummary } from "@/components/VisualProfileSummary";
-import { generateRealImage } from "@/lib/puter";
+
 import { storage } from "@/lib/storage";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
