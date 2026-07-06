@@ -1,6 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
 import type {
   GeneratedImagePreview,
   LandingPageConcept,
@@ -28,23 +26,17 @@ export const getSharedConcept = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }): Promise<SharedConceptPayload | null> => {
     if (!data.token) return null;
-    const supabase = createClient<Database>(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
-      {
-        auth: {
-          storage: undefined,
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      },
-    );
+    // EXECUTE on get_shared_concept is restricted to service_role so that
+    // anon/authenticated cannot invoke the SECURITY DEFINER function directly.
+    // Load the admin client inside the handler to keep it out of the client bundle.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: rpcData, error } = await supabase.rpc(
+    const { data: rpcData, error } = await supabaseAdmin.rpc(
       "get_shared_concept" as never,
       { _token: data.token } as never,
     );
     if (error || !rpcData) return null;
+
 
     const payload = rpcData as any;
     if (!payload?.concept) return null;
