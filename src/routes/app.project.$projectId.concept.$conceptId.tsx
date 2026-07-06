@@ -401,7 +401,7 @@ function ConceptDetail() {
       if (!preview || preview.status === "failed" || !preview.previewUrl) {
         throw new Error("Image generation returned no image");
       }
-      updateImageForSection(conceptId, sectionId, {
+      await updateImageForSection(conceptId, sectionId, {
         previewUrl: preview.previewUrl,
         realUrl: preview.status === "generated" ? preview.previewUrl : undefined,
         status: preview.status === "generated" ? "real" : preview.status,
@@ -417,7 +417,9 @@ function ConceptDetail() {
         toast.success("Real image generated");
       }
     } catch (err) {
-      updateImageForSection(conceptId, sectionId, { status: "failed" });
+      await updateImageForSection(conceptId, sectionId, { status: "failed" }).catch((saveErr) => {
+        console.error("[image] failed-status save", saveErr);
+      });
       setImagesVersion((v) => v + 1);
       toast.error(`Image generation failed: ${(err as Error).message}`);
     } finally {
