@@ -121,8 +121,14 @@ function ConceptDetail() {
   const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
   const displaySections = useMemo(
-    () => (concept ? mergeElementsIntoSections(concept.schema.sections, elements) : []),
-    [concept, elements],
+    () =>
+      concept
+        ? mergeElementsIntoSections(concept.schema.sections, elements, {
+            editedFields: getEditedFields(concept.id),
+          })
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [concept, elements, elementsVersion],
   );
   // If the project uploaded product photos, use the first one directly as the
   // hero image instead of an AI-generated one. Other sections still use AI.
