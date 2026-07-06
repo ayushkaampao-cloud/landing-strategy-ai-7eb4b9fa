@@ -26,6 +26,10 @@ function shouldReplaceItems(section: SectionProps): boolean {
   return items.every((item) => isPlaceholderText(item.title) || isPlaceholderText(item.body));
 }
 
+function generatedText(value: string | undefined, fallback: string | undefined): string | undefined {
+  return value && value.trim().length > 0 ? value : fallback;
+}
+
 function mergeSectionElement(section: SectionProps, element: LandingPageElementsSection | undefined): SectionProps {
   if (!element) return section;
 
@@ -37,11 +41,13 @@ function mergeSectionElement(section: SectionProps, element: LandingPageElements
   const nextItems =
     itemDriven && shouldReplaceItems(section) && elementBullets.length > 0
       ? elementBullets.map(parseBulletToItem)
+      : itemDriven && shouldReplaceItems(section) && element.body
+        ? [{ title: element.headline || section.title || "Details", body: element.body }]
       : section.items;
 
   return {
     ...section,
-    title: element.headline || section.title,
+    title: generatedText(element.headline, section.title),
     subtitle: element.subheadline ?? section.subtitle,
     body: element.body ?? section.body,
     bullets: itemDriven ? section.bullets : element.bullets ?? section.bullets,
