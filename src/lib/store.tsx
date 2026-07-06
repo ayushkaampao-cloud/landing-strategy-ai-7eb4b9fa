@@ -68,10 +68,12 @@ interface StoreContextValue extends AppData {
   signOut: () => Promise<void>;
   createWorkspace: (
     input: Omit<Workspace, "id" | "ownerId" | "createdAt">,
-  ) => Workspace;
+  ) => Promise<Workspace>;
   setActiveWorkspace: (id: string) => void;
   createProduct: (input: Omit<Product, "id" | "createdAt">) => Product;
-  createProject: (input: Omit<Project, "id" | "createdAt">) => Project;
+  createProject: (
+    input: Omit<Project, "id" | "createdAt"> & { product?: Product },
+  ) => Promise<Project>;
   updateProjectBrief: (
     projectId: string,
     patch: {
@@ -111,22 +113,22 @@ interface StoreContextValue extends AppData {
   disableConceptShare: (conceptId: string) => Promise<void>;
   activeWorkspace: Workspace | null;
   getResearch: (projectId: string) => ProjectResearch | null;
-  saveResearch: (projectId: string, r: ProjectResearch) => void;
+  saveResearch: (projectId: string, r: ProjectResearch) => Promise<void>;
   getElements: (conceptId: string) => LandingPageElements | null;
-  saveElements: (conceptId: string, e: LandingPageElements) => void;
+  saveElements: (conceptId: string, e: LandingPageElements) => Promise<void>;
   getImages: (conceptId: string) => GeneratedImagePreview[];
-  saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => void;
+  saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => Promise<void>;
   updateImageForSection: (
     conceptId: string,
     sectionId: string,
     patch: Partial<GeneratedImagePreview>,
-  ) => void;
+  ) => Promise<void>;
   getProductImages: (projectId: string) => ProductImageRef[];
   loadProductImages: (projectId: string) => Promise<ProductImageRef[]>;
-  saveProductImages: (projectId: string, imgs: ProductImageRef[]) => void;
+  saveProductImages: (projectId: string, imgs: ProductImageRef[]) => Promise<void>;
   getProductImageCount: (projectId: string) => number;
   getVisualProfile: (projectId: string) => ProductVisualProfile | null;
-  saveVisualProfile: (projectId: string, p: ProductVisualProfile | null) => void;
+  saveVisualProfile: (projectId: string, p: ProductVisualProfile | null) => Promise<void>;
   version: number;
   legacyImportPending: boolean;
   importLegacyData: () => Promise<void>;
@@ -460,30 +462,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createWorkspace = useCallback<StoreContextValue["createWorkspace"]>(
-    (input) => {
+    async (input) => {
       const user = dataRef.current.user;
+      if (!user) throw new Error("Please sign in before creating a brand.");
       const id = uid();
       const ws: Workspace = {
         ...input,
         id,
-        ownerId: user?.id ?? "self",
+        ownerId: user.id,
         createdAt: new Date().toISOString(),
       };
+      const { error } = await supabase.from("brands").insert({
+        id: ws.id,
+        user_id: user.id,
+        name: ws.name,
+        description: ws.brandDescription,
+        primary_audience: ws.primaryAudience,
+        brand_voice: ws.brandVoice,
+      });
+      if (error) throw error;
       setData((d) => ({
         ...d,
         workspaces: [...d.workspaces, ws],
         activeWorkspaceId: ws.id,
       }));
-      if (user) {
-        void supabase.from("brands").insert({
-          id: ws.id,
-          user_id: user.id,
-          name: ws.name,
-          description: ws.brandDescription,
-          primary_audience: ws.primaryAudience,
-          brand_voice: ws.brandVoice,
-        });
-      }
       return ws;
     },
     [],
@@ -603,34 +605,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
 
-  const createProject = useCallback<StoreContextValue["createProject"]>((input) => {
+  const createProject = useCallback<StoreContextValue["createProject"]>(async (input) => {
+    const user = dataRef.current.user;
+    if (!user) throw new Error("Please sign in before creating a project.");
     const id = uid();
-    const p: Project = {
-      ...input,
+    const { product: inputProduct, ...projectInput } = input;
+    const project: Project = {
+      ...projectInput,
       id,
+      productId: id,
       createdAt: new Date().toISOString(),
     };
+    const product =
+      inputProduct ?? dataRef.current.products.find((pr) => pr.id === input.productId);
+    const persistedProduct = product ? { ...product, id } : undefined;
+    const { error } = await supabase
+      .from("projects")
+      .insert(projectToRow(project, persistedProduct));
+    if (error) throw error;
     setData((d) => {
-      // find product; if productId matches an existing in-memory product, use it
-      const product =
-        d.products.find((pr) => pr.id === input.productId) ?? undefined;
-      // realign productId to project id (1:1 in db model)
-      const project: Project = { ...p, productId: id };
       // update product to have its id changed to project.id in-memory
       const products = product
-        ? d.products.map((pr) =>
-            pr.id === product.id ? { ...pr, id } : pr,
-          )
+        ? d.products.some((pr) => pr.id === product.id)
+          ? d.products.map((pr) =>
+              pr.id === product.id ? { ...pr, id } : pr,
+            )
+          : [...d.products, { ...product, id }]
         : d.products;
-      // Insert to DB
-      if (d.user) {
-        const row = projectToRow(project, product ? { ...product, id } : undefined);
-        void supabase.from("projects").insert(row);
-      }
       return { ...d, projects: [...d.projects, project], products };
     });
-    return p;
-  }, []);
+    bump();
+    return project;
+  }, [bump]);
 
   const persistConceptsToDb = useCallback(
     async (projectId: string, concepts: LandingPageConcept[]) => {
@@ -889,30 +895,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   // Sub-resource operations
-  const saveResearch = useCallback((projectId: string, r: ProjectResearch) => {
+  const saveResearch = useCallback(async (projectId: string, r: ProjectResearch) => {
+    if (dataRef.current.user) {
+      const { error } = await supabase
+        .from("projects")
+        .update({ research: r as any })
+        .eq("id", projectId);
+      if (error) throw error;
+    }
     setData((d) => ({ ...d, research: { ...d.research, [projectId]: r } }));
     bump();
-    if (dataRef.current.user) {
-      void supabase.from("projects").update({ research: r as any }).eq("id", projectId);
-    }
   }, [bump]);
 
   const upsertElementsRow = async (conceptId: string, e: LandingPageElements) => {
     const existingId = dataRef.current.elementRowIdByConcept[conceptId];
     if (existingId) {
-      await supabase
+      const { error } = await supabase
         .from("elements")
         .update({ body_copy: JSON.stringify(e) })
         .eq("id", existingId);
+      if (error) throw error;
       return existingId;
     } else {
       const newId = uid();
-      await supabase.from("elements").insert({
+      const { error } = await supabase.from("elements").insert({
         id: newId,
         concept_id: conceptId,
         section_id: "__doc__",
         body_copy: JSON.stringify(e),
       });
+      if (error) throw error;
       setData((d) => ({
         ...d,
         elementRowIdByConcept: { ...d.elementRowIdByConcept, [conceptId]: newId },
@@ -921,14 +933,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveElements = useCallback((conceptId: string, e: LandingPageElements) => {
+  const saveElements = useCallback(async (conceptId: string, e: LandingPageElements) => {
+    if (dataRef.current.user) {
+      await upsertElementsRow(conceptId, e);
+    }
     setData((d) => ({ ...d, elements: { ...d.elements, [conceptId]: e } }));
     bump();
-    if (dataRef.current.user) {
-      void upsertElementsRow(conceptId, e).catch((err) =>
-        console.error("saveElements db", err),
-      );
-    }
   }, [bump]);
 
   const persistImagesToDb = useCallback(
@@ -940,12 +950,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           elemId = await upsertElementsRow(conceptId, existing);
         } else {
           elemId = uid();
-          await supabase.from("elements").insert({
+          const { error } = await supabase.from("elements").insert({
             id: elemId,
             concept_id: conceptId,
             section_id: "__doc__",
             body_copy: null,
           });
+          if (error) throw error;
           setData((d) => ({
             ...d,
             elementRowIdByConcept: { ...d.elementRowIdByConcept, [conceptId]: elemId! },
@@ -957,47 +968,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const saveImages = useCallback((conceptId: string, imgs: GeneratedImagePreview[]) => {
-    // Merge with existing so bulk regen doesn't wipe per-section "real" images.
+  const saveImages = useCallback(async (conceptId: string, imgs: GeneratedImagePreview[]) => {
+    // Merge with existing so bulk regen never wipes another section's image.
     const existing = dataRef.current.images[conceptId] ?? [];
     const bySection: Record<string, GeneratedImagePreview> = {};
     existing.forEach((i) => (bySection[i.sectionId] = i));
-    const merged = imgs.map((im) => {
+    imgs.forEach((im) => {
       const prev = bySection[im.sectionId];
       if (prev && prev.realUrl && prev.status === "real") {
-        return { ...im, realUrl: prev.realUrl, status: "real" as const };
+        bySection[im.sectionId] = { ...im, realUrl: prev.realUrl, status: "real" as const };
+      } else if (im.status === "failed" && prev?.previewUrl) {
+        bySection[im.sectionId] = { ...prev, status: "failed" as const };
+      } else {
+        bySection[im.sectionId] = im;
       }
-      return im;
     });
+    const order = new Map<string, number>();
+    [...existing, ...imgs].forEach((im, index) => {
+      if (!order.has(im.sectionId)) order.set(im.sectionId, index);
+    });
+    const merged = Object.values(bySection).sort(
+      (a, b) => (order.get(a.sectionId) ?? 0) - (order.get(b.sectionId) ?? 0),
+    );
+    if (dataRef.current.user) {
+      const elemId = await persistImagesToDb(conceptId, merged);
+      const { error: delErr } = await supabase
+        .from("image_previews")
+        .delete()
+        .eq("element_id", elemId);
+      if (delErr) throw delErr;
+      if (merged.length > 0) {
+        const rows = merged.map((im) => ({
+          element_id: elemId,
+          preview_url: im.previewUrl,
+          status: im.status,
+          metadata: {
+            sectionId: im.sectionId,
+            imagePrompt: im.imagePrompt,
+            imageStyle: im.imageStyle,
+            imageMode: im.imageMode,
+            category: im.category,
+            realUrl: im.realUrl,
+            placeholderLabel: im.placeholderLabel,
+          },
+        }));
+        const { error: insErr } = await supabase.from("image_previews").insert(rows);
+        if (insErr) throw insErr;
+      }
+    }
     setData((d) => ({ ...d, images: { ...d.images, [conceptId]: merged } }));
     bump();
-    if (dataRef.current.user) {
-      (async () => {
-        const elemId = await persistImagesToDb(conceptId, merged);
-        await supabase.from("image_previews").delete().eq("element_id", elemId);
-        if (merged.length > 0) {
-          const rows = merged.map((im) => ({
-            element_id: elemId,
-            preview_url: im.previewUrl,
-            status: im.status,
-            metadata: {
-              sectionId: im.sectionId,
-              imagePrompt: im.imagePrompt,
-              imageStyle: im.imageStyle,
-              imageMode: im.imageMode,
-              category: im.category,
-              realUrl: im.realUrl,
-              placeholderLabel: im.placeholderLabel,
-            },
-          }));
-          await supabase.from("image_previews").insert(rows);
-        }
-      })().catch((err) => console.error("saveImages db", err));
-    }
   }, [bump, persistImagesToDb]);
 
   const updateImageForSection = useCallback(
-    (conceptId: string, sectionId: string, patch: Partial<GeneratedImagePreview>) => {
+    async (conceptId: string, sectionId: string, patch: Partial<GeneratedImagePreview>) => {
       const current = dataRef.current.images[conceptId] ?? [];
       const idx = current.findIndex((i) => i.sectionId === sectionId);
       let next: GeneratedImagePreview[];
@@ -1016,83 +1040,91 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           } as GeneratedImagePreview,
         ];
       }
+      if (dataRef.current.user) {
+        const elemId = await persistImagesToDb(conceptId, next);
+        const merged = next.find((i) => i.sectionId === sectionId)!;
+        // Remove any existing row for this section, then insert the fresh one.
+        const { error: delErr } = await supabase
+          .from("image_previews")
+          .delete()
+          .eq("element_id", elemId)
+          .eq("metadata->>sectionId", sectionId);
+        if (delErr) throw delErr;
+        const { error: insErr } = await supabase.from("image_previews").insert({
+          element_id: elemId,
+          preview_url: merged.previewUrl,
+          status: merged.status,
+          metadata: {
+            sectionId: merged.sectionId,
+            imagePrompt: merged.imagePrompt,
+            imageStyle: merged.imageStyle,
+            imageMode: merged.imageMode,
+            category: merged.category,
+            realUrl: merged.realUrl,
+            placeholderLabel: merged.placeholderLabel,
+          },
+        });
+        if (insErr) throw insErr;
+      }
       setData((d) => ({ ...d, images: { ...d.images, [conceptId]: next } }));
       bump();
-      if (dataRef.current.user) {
-        (async () => {
-          const elemId = await persistImagesToDb(conceptId, next);
-          const merged = next.find((i) => i.sectionId === sectionId)!;
-          // Remove any existing row for this section, then insert the fresh one.
-          await supabase
-            .from("image_previews")
-            .delete()
-            .eq("element_id", elemId)
-            .eq("metadata->>sectionId", sectionId);
-          await supabase.from("image_previews").insert({
-            element_id: elemId,
-            preview_url: merged.previewUrl,
-            status: merged.status,
-            metadata: {
-              sectionId: merged.sectionId,
-              imagePrompt: merged.imagePrompt,
-              imageStyle: merged.imageStyle,
-              imageMode: merged.imageMode,
-              category: merged.category,
-              realUrl: merged.realUrl,
-              placeholderLabel: merged.placeholderLabel,
-            },
-          });
-        })().catch((err) => console.error("updateImageForSection db", err));
-      }
     },
     [bump, persistImagesToDb],
   );
 
+  const persistVisualProfilePatch = useCallback(
+    async (projectId: string, patch: Record<string, unknown>) => {
+      const { data: rows, error: selErr } = await supabase
+        .from("product_visual_profiles")
+        .select("id")
+        .eq("project_id", projectId)
+        .limit(1);
+      if (selErr) throw selErr;
+      if ((rows ?? []).length > 0) {
+        const { error } = await supabase
+          .from("product_visual_profiles")
+          .update(patch as any)
+          .eq("project_id", projectId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("product_visual_profiles").insert({
+          project_id: projectId,
+          ...(patch as any),
+        });
+        if (error) throw error;
+      }
+    },
+    [],
+  );
 
   const saveProductImages = useCallback(
-    (projectId: string, imgs: ProductImageRef[]) => {
+    async (projectId: string, imgs: ProductImageRef[]) => {
+      if (dataRef.current.user) {
+        await persistVisualProfilePatch(projectId, { source_image_urls: imgs as any });
+      }
       setData((d) => ({
         ...d,
         productImages: { ...d.productImages, [projectId]: imgs },
         productImageCount: { ...d.productImageCount, [projectId]: imgs.length },
       }));
       bump();
-      if (dataRef.current.user) {
-        (async () => {
-          const { data: existing } = await supabase
-            .from("product_visual_profiles")
-            .select("id")
-            .eq("project_id", projectId)
-            .maybeSingle();
-          if (existing) {
-            await supabase
-              .from("product_visual_profiles")
-              .update({ source_image_urls: imgs as any })
-              .eq("id", existing.id);
-          } else {
-            await supabase.from("product_visual_profiles").insert({
-              project_id: projectId,
-              source_image_urls: imgs as any,
-            });
-          }
-        })().catch((err) => console.error("saveProductImages db", err));
-      }
     },
-    [bump],
+    [bump, persistVisualProfilePatch],
   );
 
   const loadProductImages = useCallback(
     async (projectId: string): Promise<ProductImageRef[]> => {
       if (!dataRef.current.user) return dataRef.current.productImages[projectId] ?? [];
-      const { data: row, error } = await supabase
+      const { data: rows, error } = await supabase
         .from("product_visual_profiles")
         .select("source_image_urls")
         .eq("project_id", projectId)
-        .maybeSingle();
+        .limit(1);
       if (error) {
         console.error("loadProductImages db", error);
         return dataRef.current.productImages[projectId] ?? [];
       }
+      const row = (rows ?? [])[0] as any;
       const imgs = ((row?.source_image_urls as any) ?? []) as ProductImageRef[];
       setData((d) => ({
         ...d,
@@ -1105,32 +1137,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const saveVisualProfile = useCallback(
-    (projectId: string, p: ProductVisualProfile | null) => {
+    async (projectId: string, p: ProductVisualProfile | null) => {
+      if (dataRef.current.user) {
+        await persistVisualProfilePatch(projectId, {
+          profile: p as any,
+          description: p?.productType ?? null,
+        });
+      }
       setData((d) => ({ ...d, visualProfile: { ...d.visualProfile, [projectId]: p } }));
       bump();
-      if (dataRef.current.user) {
-        (async () => {
-          const { data: existing } = await supabase
-            .from("product_visual_profiles")
-            .select("id")
-            .eq("project_id", projectId)
-            .maybeSingle();
-          if (existing) {
-            await supabase
-              .from("product_visual_profiles")
-              .update({ profile: p as any, description: p?.productType ?? null })
-              .eq("id", existing.id);
-          } else {
-            await supabase.from("product_visual_profiles").insert({
-              project_id: projectId,
-              profile: p as any,
-              description: p?.productType ?? null,
-            });
-          }
-        })().catch((err) => console.error("saveVisualProfile db", err));
-      }
     },
-    [bump],
+    [bump, persistVisualProfilePatch],
   );
 
   const importLegacyData = useCallback(async () => {

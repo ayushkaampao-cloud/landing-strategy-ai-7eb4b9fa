@@ -17,6 +17,7 @@ import type {
   ProjectClassification,
   ProjectResearch,
   ProductVisualProfile,
+  SectionProps,
 } from "@/types";
 
 interface Body {
@@ -207,15 +208,106 @@ export const Route = createFileRoute("/api/generate-elements")({
           return Response.json(elements);
         } catch (err) {
           console.error("[elements] error:", err);
-          return Response.json(
-            { error: "Content generation is temporarily unavailable — please try again in a moment." },
-            { status: 503 },
-          );
+          return Response.json({
+            ...fallbackElements(body, cls),
+            fallback: true,
+            error: "Elements generated locally because AI is unavailable.",
+          });
         }
       },
     },
   },
 });
+
+function fallbackElements(body: Body, cls?: ProjectClassification): LandingPageElements {
+  const visualBrief = buildVisualBrief(
+    body.workspace.name,
+    body.product.name,
+    cls,
+    body.research,
+  );
+  const grounding = groundingPrefix(body.visualProfile?.summaryText);
+  const heroSection = body.concept.schema.sections.find((s) => s.type === "hero");
+  const heroMode: ImageMode = pickImageModeForSection("hero", cls, body.research);
+  const sections = body.concept.schema.sections.map((section, i) => {
+    const imageMode: ImageMode = pickImageModeForSection(section.type, cls, body.research);
+    const imagePrompt = fallbackImagePrompt(section, body.product.name, body.workspace.name);
+    return {
+      sectionId: section.id,
+      sectionType: section.type,
+      headline: section.title ?? `${body.product.name} section ${i + 1}`,
+      subheadline: section.subtitle,
+      body: section.body,
+      bullets: section.bullets,
+      cta: section.ctaLabel,
+      imagePrompts:
+        imageMode === "no_image_needed"
+          ? []
+          : enrichPrompts(
+              [imagePrompt],
+              imageMode,
+              visualBrief.brandName,
+              body.product.name,
+              grounding,
+            ),
+      imageMode,
+      negativePrompt: UNIVERSAL_NEGATIVE_PROMPT,
+      visualDirection: "Clean premium product-led layout using the provided brand and product details.",
+      implementationNote: "Local fallback generated without AI provider output.",
+      placeholder: section.placeholder === true,
+      proofNeeded: section.proofNeeded === true,
+    } satisfies LandingPageElementsSection;
+  });
+
+  const heroPrompt = fallbackImagePrompt(heroSection, body.product.name, body.workspace.name);
+  const hero = {
+    headline: heroSection?.title ?? body.concept.conceptName,
+    subheadline:
+      heroSection?.subtitle ??
+      body.concept.oneLineStrategy ??
+      body.product.shortDescription,
+    primaryCTA: heroSection?.ctaLabel ?? "Shop now",
+    secondaryCTA: heroSection?.ctaSecondaryLabel,
+    imagePrompts:
+      heroMode === "no_image_needed"
+        ? []
+        : enrichPrompts(
+            [heroPrompt],
+            heroMode,
+            visualBrief.brandName,
+            body.product.name,
+            grounding,
+          ),
+    visualDirection: "Premium product hero grounded in the submitted product brief.",
+    placeholder: heroSection?.placeholder,
+  };
+
+  return {
+    conceptId: body.concept.id,
+    hero,
+    sections,
+    globalStyle: {
+      designMood: "Clean, premium, conversion-focused",
+      imageStyle: "Product-led, high-contrast, uncluttered",
+      colorMood: "Use brand/product colors as accents, not heavy full-section fills",
+      typographyMood: "Modern editorial sans-serif",
+      layoutMood: "Spacious modular landing page",
+      brandSignalKeywords: [body.workspace.name, body.product.name],
+    },
+    copyExportText: buildCopyExport(hero, sections, body),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function fallbackImagePrompt(
+  section: SectionProps | undefined,
+  productName: string,
+  brandName: string,
+): string {
+  const sectionLabel = section?.type?.replace(/-/g, " ") ?? "landing page";
+  const headline = section?.title ? ` for the headline "${section.title}"` : "";
+  return `Premium ${sectionLabel} visual${headline}, featuring ${productName} for ${brandName}, clean studio lighting, uncluttered composition`;
+}
 
 function enrichPrompts(
   prompts: string[],

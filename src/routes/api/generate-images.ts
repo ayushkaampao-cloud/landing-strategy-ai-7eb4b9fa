@@ -17,7 +17,7 @@ interface Body {
 }
 
 const GEMINI_IMAGE_MODEL = "google/gemini-3.1-flash-image";
-const LOVABLE_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const LOVABLE_IMAGE_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
 const REQUEST_TIMEOUT_MS = 45_000;
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365; // 1 year
 
@@ -36,11 +36,46 @@ function buildInstruction(imagePrompt: string, negativePrompt: string | undefine
   return `${imagePrompt}.${avoid}`;
 }
 
-/** Extract the first base64 image payload from a Gemini image chat completion response.
- *  The Gateway normalizes upstream shapes; images may appear on the message as an
- *  `images` array of data URLs, or as a text-content-block data URL, or embedded in
- *  the string content. We try each in order. */
+function fallbackPreview(item: Body["items"][number], category?: ProjectCategory): GeneratedImagePreview {
+  const mode: ImageMode = item.imageMode ?? inferMode(item.imagePrompt);
+  return {
+    sectionId: item.sectionId,
+    imagePrompt: item.imagePrompt,
+    imageStyle: item.imageStyle ?? "Branded placeholder",
+    previewUrl: makePlaceholderDataUrl(item.sectionId, mode),
+    status: "placeholder",
+    imageMode: mode,
+    category,
+    placeholderLabel: mode.replace(/_/g, " "),
+  };
+}
+
+function makePlaceholderDataUrl(sectionId: string, mode: ImageMode): string {
+  const label = `${sectionId}\n${mode.replace(/_/g, " ")}`
+    .replace(/[&<>]/g, "")
+    .slice(0, 80);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7f1e8"/><stop offset="1" stop-color="#ead7ca"/></linearGradient></defs>
+  <rect width="1280" height="900" fill="url(#g)"/>
+  <rect x="92" y="92" width="1096" height="716" rx="42" fill="#fffaf4" fill-opacity=".72" stroke="#d6b9a6" stroke-opacity=".55"/>
+  <circle cx="1018" cy="214" r="74" fill="#d26a3c" fill-opacity=".16"/>
+  <circle cx="246" cy="706" r="104" fill="#1f1a17" fill-opacity=".06"/>
+  <text x="640" y="430" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#7b4b35" font-weight="700">Visual placeholder</text>
+  <text x="640" y="486" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#9a6a52">${label}</text>
+</svg>`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+}
+
+/** Extract the first base64 image payload. The dedicated image endpoint
+ *  normally returns OpenAI-style `data[0].b64_json`; legacy shapes are kept
+ *  as a defensive fallback while older gateway responses drain out. */
 function extractBase64Png(data: unknown): { b64: string; mime: string } | null {
+  const imageRoot = data as { data?: Array<{ b64_json?: string; mime_type?: string }> };
+  const first = imageRoot.data?.[0];
+  if (first?.b64_json) {
+    return { b64: first.b64_json, mime: first.mime_type ?? "image/png" };
+  }
+
   const root = data as {
     choices?: Array<{
       message?: {
@@ -109,9 +144,10 @@ async function loadReferenceImages(projectId: string | undefined): Promise<strin
       .from("product_visual_profiles")
       .select("source_image_urls")
       .eq("project_id", projectId)
-      .maybeSingle();
-    if (error || !data?.source_image_urls) return [];
-    const arr = data.source_image_urls as unknown as Array<{ dataUrl?: string }>;
+      .limit(1);
+    const row = data?.[0];
+    if (error || !row?.source_image_urls) return [];
+    const arr = row.source_image_urls as unknown as Array<{ dataUrl?: string }>;
     if (!Array.isArray(arr)) return [];
     return arr
       .map((r) => r?.dataUrl)
@@ -141,21 +177,13 @@ async function generateOne(args: {
 
   const failed = (label: string): GeneratedImagePreview => {
     console.warn(`[generate-images] section=${item.sectionId} failed: ${label}`);
-    return {
-      sectionId: item.sectionId,
-      imagePrompt: item.imagePrompt,
-      imageStyle: item.imageStyle ?? "",
-      previewUrl: "",
-      status: "failed",
-      imageMode: mode,
-      category,
-    };
+    return fallbackPreview(item, category);
   };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch(LOVABLE_GATEWAY_URL, {
+    const res = await fetch(LOVABLE_IMAGE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -164,8 +192,8 @@ async function generateOne(args: {
       signal: controller.signal,
       body: JSON.stringify({
         model: GEMINI_IMAGE_MODEL,
-        modalities: ["image", "text"],
         messages: [{ role: "user", content: contentBlocks }],
+        modalities: ["image", "text"],
       }),
     });
     if (!res.ok) {
@@ -222,14 +250,8 @@ export const Route = createFileRoute("/api/generate-images")({
         if (!apiKey) {
           console.warn("[generate-images] LOVABLE_API_KEY missing");
           const previews: GeneratedImagePreview[] = (body.items ?? []).map((item) => ({
-            sectionId: item.sectionId,
-            imagePrompt: item.imagePrompt,
-            imageStyle: item.imageStyle ?? "",
-            previewUrl: "",
-            status: "failed",
-            imageMode: item.imageMode ?? inferMode(item.imagePrompt),
-            category: body.category,
-          }));
+          ...fallbackPreview(item, body.category),
+        }));
           return Response.json({ previews });
         }
 

@@ -319,8 +319,12 @@ function ConceptDetail() {
           console.error("[strategies] api error:", res.status, detail);
           throw new Error("provider_unavailable");
         }
-        const data = (await res.json()) as { concepts: LandingPageConcept[] };
-        const fresh = data.concepts[0];
+        const data = (await res.json()) as { concepts?: LandingPageConcept[]; fallback?: boolean };
+        let fresh = data.concepts?.[0];
+        if (data.fallback || !fresh) {
+          const skeleton = generateConceptsForProject(workspace, product, project);
+          fresh = skeleton.find((c) => c.templateFamily === concept.templateFamily);
+        }
         if (!fresh) throw new Error("No concept returned");
         // Preserve stable id/createdAt so URL stays valid and elements/images
         // rows don't cascade-delete.
@@ -397,14 +401,25 @@ function ConceptDetail() {
       if (!preview || preview.status === "failed" || !preview.previewUrl) {
         throw new Error("Image generation returned no image");
       }
-      updateImageForSection(conceptId, sectionId, {
-        realUrl: preview.previewUrl,
-        status: "real",
+      await updateImageForSection(conceptId, sectionId, {
+        previewUrl: preview.previewUrl,
+        realUrl: preview.status === "generated" ? preview.previewUrl : undefined,
+        status: preview.status === "generated" ? "real" : preview.status,
+        imagePrompt: preview.imagePrompt,
+        imageStyle: preview.imageStyle,
+        imageMode: preview.imageMode,
+        placeholderLabel: preview.placeholderLabel,
       });
       setImagesVersion((v) => v + 1);
-      toast.success("Real image generated");
+      if (preview.status === "placeholder") {
+        toast.message("Image provider unavailable — kept a branded placeholder for this section.");
+      } else {
+        toast.success("Real image generated");
+      }
     } catch (err) {
-      updateImageForSection(conceptId, sectionId, { status: "failed" });
+      await updateImageForSection(conceptId, sectionId, { status: "failed" }).catch((saveErr) => {
+        console.error("[image] failed-status save", saveErr);
+      });
       setImagesVersion((v) => v + 1);
       toast.error(`Image generation failed: ${(err as Error).message}`);
     } finally {
@@ -418,8 +433,9 @@ function ConceptDetail() {
     setElementsLoading(true);
     setElementsError(null);
     setElementsStep(1);
+    let stepTimer: ReturnType<typeof setInterval> | undefined;
     try {
-      const stepTimer = setInterval(() => setElementsStep((s) => Math.min(s + 1, 4)), 700);
+      stepTimer = setInterval(() => setElementsStep((s) => Math.min(s + 1, 4)), 700);
       const res = await fetch("/api/generate-elements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -440,20 +456,24 @@ function ConceptDetail() {
           visualProfile: visualProfile ?? undefined,
         }),
       });
-      clearInterval(stepTimer);
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
         console.error("[elements] api error:", res.status, detail);
         throw new Error("Content generation is temporarily unavailable — please try again in a moment.");
       }
-      const data = (await res.json()) as LandingPageElements;
+      const data = (await res.json()) as LandingPageElements & { fallback?: boolean; error?: string };
+      if (data.fallback) {
+        toast.message("Elements generated with local fallback because AI is unavailable.");
+      }
+      const { fallback: _fallback, error: _fallbackError, ...elementsToSave } = data;
 
-      saveElements(conceptId, data);
+      await saveElements(conceptId, elementsToSave);
       setElementsVersion((v) => v + 1);
       setElementsStep(4);
     } catch (err) {
       setElementsError((err as Error).message);
     } finally {
+      if (stepTimer) clearInterval(stepTimer);
       setElementsLoading(false);
     }
   }
@@ -471,15 +491,26 @@ function ConceptDetail() {
         concept!.schema.sections.filter((s) => s.type === "hero").map((s) => s.id),
       );
       const skipHero = !!heroProductImage;
+      const sectionsWithElementPrompts = new Set(
+        elements.sections
+          .filter((sec) => (sec.imagePrompts ?? []).length > 0)
+          .map((sec) => sec.sectionId),
+      );
+      const heroFallbackItems = skipHero
+        ? []
+        : [...heroSectionIds]
+            .filter((id) => !sectionsWithElementPrompts.has(id))
+            .flatMap((sectionId) =>
+              elements.hero.imagePrompts.map((p) => ({
+                sectionId,
+                imagePrompt: p,
+                imageStyle: elements.globalStyle.imageStyle,
+                imageMode: "product_packshot" as const,
+                negativePrompt: negBySection[sectionId],
+              })),
+            );
       const items = [
-        ...elements.hero.imagePrompts
-          .map((p, i) => ({
-            sectionId: `hero-${i}`,
-            imagePrompt: p,
-            imageStyle: elements.globalStyle.imageStyle,
-            negativePrompt: undefined as string | undefined,
-          }))
-          .filter(() => !skipHero),
+        ...heroFallbackItems,
         ...elements.sections.flatMap((sec) =>
           (sec.imagePrompts ?? [])
             .filter(() => !(skipHero && heroSectionIds.has(sec.sectionId)))
@@ -506,7 +537,7 @@ function ConceptDetail() {
       });
       if (!res.ok) throw new Error("Image generation failed");
       const data = (await res.json()) as { previews: GeneratedImagePreview[] };
-      saveImages(conceptId, data.previews);
+      await saveImages(conceptId, data.previews);
       setImgFailed({});
       setImgRetry({});
       setImagesVersion((v) => v + 1);

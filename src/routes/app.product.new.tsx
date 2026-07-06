@@ -14,7 +14,7 @@ export const Route = createFileRoute("/app/product/new")({
 const GOALS: ProjectGoal[] = ["Sell product", "Collect leads", "Book calls"];
 
 function NewProduct() {
-  const { activeWorkspace, createProduct, createProject, saveProductImages, saveVisualProfile } = useStore();
+  const { activeWorkspace, createProject, saveProductImages, saveVisualProfile } = useStore();
   const navigate = useNavigate();
 
   const [sourceMode, setSourceMode] = useState<ProjectSourceMode>("brief");
@@ -37,6 +37,7 @@ function NewProduct() {
   const [goal, setGoal] = useState<ProjectGoal>("Sell product");
   const [productImages, setProductImages] = useState<ProductImageRef[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   if (!activeWorkspace) {
     return (
@@ -57,8 +58,9 @@ function NewProduct() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name) return;
-    const product = createProduct({
+    if (!name || saving) return;
+    setSaving(true);
+    const product = {
       workspaceId: activeWorkspace.id,
       name,
       shortDescription: shortDesc,
@@ -67,66 +69,78 @@ function NewProduct() {
       priceInfo: price,
       productUrl: productUrl || undefined,
       siteUrl: siteUrl || undefined,
-    });
-    const project = createProject({
-      workspaceId: activeWorkspace.id,
-      productId: product.id,
-      projectName: projectName || `${name} — First Landing Page Set`,
-      goal,
-      sourceMode,
-      landingPageUrl: sourceMode === "url" ? landingPageUrl || undefined : undefined,
-      notes: notes || undefined,
-      tone: tone || undefined,
-      mainProblem: mainProblem || undefined,
-      objections: objections || undefined,
-      competitor: competitor || undefined,
-      desiredAngle: desiredAngle || undefined,
-    });
+      id:
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2) + Date.now().toString(36),
+      createdAt: new Date().toISOString(),
+    };
+    try {
+      const project = await createProject({
+        workspaceId: activeWorkspace.id,
+        productId: product.id,
+        product,
+        projectName: projectName || `${name} — First Landing Page Set`,
+        goal,
+        sourceMode,
+        landingPageUrl: sourceMode === "url" ? landingPageUrl || undefined : undefined,
+        notes: notes || undefined,
+        tone: tone || undefined,
+        mainProblem: mainProblem || undefined,
+        objections: objections || undefined,
+        competitor: competitor || undefined,
+        desiredAngle: desiredAngle || undefined,
+      });
 
-    // Persist uploads + kick off visual analysis (best-effort; never blocks).
-    if (productImages.length > 0) {
-      saveProductImages(project.id, productImages);
-      setAnalyzing(true);
-      try {
-        const res = await fetch("/api/analyze-product-images", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectId: project.id,
-            images: productImages.map((i) => ({ dataUrl: i.dataUrl })),
-          }),
-        });
-        if (res.ok) {
-          const data = (await res.json()) as {
-            profile: import("@/types").ProductVisualProfile | null;
-            mode?: string;
-          };
-          saveVisualProfile(project.id, data.profile);
-          if (data.profile?.summaryText) {
-            toast.success("Product photos analyzed ✓");
+      if (productImages.length > 0) {
+        await saveProductImages(project.id, productImages);
+        setAnalyzing(true);
+        try {
+          const res = await fetch("/api/analyze-product-images", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              projectId: project.id,
+              images: productImages.map((i) => ({ dataUrl: i.dataUrl })),
+            }),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as {
+              profile: import("@/types").ProductVisualProfile | null;
+              mode?: string;
+            };
+            await saveVisualProfile(project.id, data.profile);
+            if (data.profile?.summaryText) {
+              toast.success("Product photos analyzed ✓");
+            } else {
+              toast.message(
+                "Product photos saved — visual analysis unavailable right now, continuing without grounding.",
+              );
+            }
           } else {
-            toast.message(
-              "Product photos saved — visual analysis unavailable right now, continuing without grounding.",
-            );
+            toast.message("Product photos saved — visual analysis failed, continuing without grounding.");
           }
-        } else {
+        } catch (analysisErr) {
+          console.warn("[product-image analysis] failed:", analysisErr);
           toast.message("Product photos saved — visual analysis failed, continuing without grounding.");
+        } finally {
+          setAnalyzing(false);
         }
-      } catch (err) {
-        console.warn("[product-image analysis] failed:", err);
-        toast.message("Product photos saved — visual analysis failed, continuing without grounding.");
-      } finally {
-        setAnalyzing(false);
+      } else {
+        await saveVisualProfile(project.id, null);
       }
-    } else {
-      saveVisualProfile(project.id, null);
+
+      navigate({
+        to: "/app/project/$projectId/generating",
+        params: { projectId: project.id },
+      });
+    } catch (err) {
+      console.warn("[project create] failed:", err);
+      toast.error("Project could not be saved: " + (err as Error).message);
+      setAnalyzing(false);
+    } finally {
+      setSaving(false);
     }
-
-
-    navigate({
-      to: "/app/project/$projectId/generating",
-      params: { projectId: project.id },
-    });
   };
 
   return (
@@ -292,10 +306,14 @@ function NewProduct() {
 
           <button
             type="submit"
-            disabled={analyzing}
+            disabled={saving || analyzing}
             className="h-11 px-6 bg-ink text-background font-medium rounded-md text-sm disabled:opacity-60"
           >
-            {analyzing ? "Analyzing product images…" : "Run research & generate 5 directions →"}
+            {analyzing
+              ? "Analyzing product images…"
+              : saving
+                ? "Saving project…"
+                : "Run research & generate 5 directions →"}
           </button>
         </form>
       </div>
