@@ -90,31 +90,37 @@ function NewProduct() {
       if (productImages.length > 0) {
         await saveProductImages(project.id, productImages);
         setAnalyzing(true);
-        const res = await fetch("/api/analyze-product-images", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectId: project.id,
-            images: productImages.map((i) => ({ dataUrl: i.dataUrl })),
-          }),
-        });
-        if (res.ok) {
-          const data = (await res.json()) as {
-            profile: import("@/types").ProductVisualProfile | null;
-            mode?: string;
-          };
-          await saveVisualProfile(project.id, data.profile);
-          if (data.profile?.summaryText) {
-            toast.success("Product photos analyzed ✓");
+        try {
+          const res = await fetch("/api/analyze-product-images", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              projectId: project.id,
+              images: productImages.map((i) => ({ dataUrl: i.dataUrl })),
+            }),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as {
+              profile: import("@/types").ProductVisualProfile | null;
+              mode?: string;
+            };
+            await saveVisualProfile(project.id, data.profile);
+            if (data.profile?.summaryText) {
+              toast.success("Product photos analyzed ✓");
+            } else {
+              toast.message(
+                "Product photos saved — visual analysis unavailable right now, continuing without grounding.",
+              );
+            }
           } else {
-            toast.message(
-              "Product photos saved — visual analysis unavailable right now, continuing without grounding.",
-            );
+            toast.message("Product photos saved — visual analysis failed, continuing without grounding.");
           }
-        } else {
+        } catch (analysisErr) {
+          console.warn("[product-image analysis] failed:", analysisErr);
           toast.message("Product photos saved — visual analysis failed, continuing without grounding.");
+        } finally {
+          setAnalyzing(false);
         }
-        setAnalyzing(false);
       } else {
         await saveVisualProfile(project.id, null);
       }
