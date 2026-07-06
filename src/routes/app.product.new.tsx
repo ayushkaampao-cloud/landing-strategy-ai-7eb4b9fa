@@ -37,6 +37,7 @@ function NewProduct() {
   const [goal, setGoal] = useState<ProjectGoal>("Sell product");
   const [productImages, setProductImages] = useState<ProductImageRef[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   if (!activeWorkspace) {
     return (
@@ -57,7 +58,8 @@ function NewProduct() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name) return;
+    if (!name || saving) return;
+    setSaving(true);
     const product = createProduct({
       workspaceId: activeWorkspace.id,
       name,
@@ -68,26 +70,26 @@ function NewProduct() {
       productUrl: productUrl || undefined,
       siteUrl: siteUrl || undefined,
     });
-    const project = createProject({
-      workspaceId: activeWorkspace.id,
-      productId: product.id,
-      projectName: projectName || `${name} — First Landing Page Set`,
-      goal,
-      sourceMode,
-      landingPageUrl: sourceMode === "url" ? landingPageUrl || undefined : undefined,
-      notes: notes || undefined,
-      tone: tone || undefined,
-      mainProblem: mainProblem || undefined,
-      objections: objections || undefined,
-      competitor: competitor || undefined,
-      desiredAngle: desiredAngle || undefined,
-    });
+    try {
+      const project = await createProject({
+        workspaceId: activeWorkspace.id,
+        productId: product.id,
+        product,
+        projectName: projectName || `${name} — First Landing Page Set`,
+        goal,
+        sourceMode,
+        landingPageUrl: sourceMode === "url" ? landingPageUrl || undefined : undefined,
+        notes: notes || undefined,
+        tone: tone || undefined,
+        mainProblem: mainProblem || undefined,
+        objections: objections || undefined,
+        competitor: competitor || undefined,
+        desiredAngle: desiredAngle || undefined,
+      });
 
-    // Persist uploads + kick off visual analysis (best-effort; never blocks).
-    if (productImages.length > 0) {
-      saveProductImages(project.id, productImages);
-      setAnalyzing(true);
-      try {
+      if (productImages.length > 0) {
+        await saveProductImages(project.id, productImages);
+        setAnalyzing(true);
         const res = await fetch("/api/analyze-product-images", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -101,7 +103,7 @@ function NewProduct() {
             profile: import("@/types").ProductVisualProfile | null;
             mode?: string;
           };
-          saveVisualProfile(project.id, data.profile);
+          await saveVisualProfile(project.id, data.profile);
           if (data.profile?.summaryText) {
             toast.success("Product photos analyzed ✓");
           } else {
@@ -112,21 +114,22 @@ function NewProduct() {
         } else {
           toast.message("Product photos saved — visual analysis failed, continuing without grounding.");
         }
-      } catch (err) {
-        console.warn("[product-image analysis] failed:", err);
-        toast.message("Product photos saved — visual analysis failed, continuing without grounding.");
-      } finally {
         setAnalyzing(false);
+      } else {
+        await saveVisualProfile(project.id, null);
       }
-    } else {
-      saveVisualProfile(project.id, null);
+
+      navigate({
+        to: "/app/project/$projectId/generating",
+        params: { projectId: project.id },
+      });
+    } catch (err) {
+      console.warn("[project create] failed:", err);
+      toast.error("Project could not be saved: " + (err as Error).message);
+      setAnalyzing(false);
+    } finally {
+      setSaving(false);
     }
-
-
-    navigate({
-      to: "/app/project/$projectId/generating",
-      params: { projectId: project.id },
-    });
   };
 
   return (
@@ -292,10 +295,14 @@ function NewProduct() {
 
           <button
             type="submit"
-            disabled={analyzing}
+            disabled={saving || analyzing}
             className="h-11 px-6 bg-ink text-background font-medium rounded-md text-sm disabled:opacity-60"
           >
-            {analyzing ? "Analyzing product images…" : "Run research & generate 5 directions →"}
+            {analyzing
+              ? "Analyzing product images…"
+              : saving
+                ? "Saving project…"
+                : "Run research & generate 5 directions →"}
           </button>
         </form>
       </div>
