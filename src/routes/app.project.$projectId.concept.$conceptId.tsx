@@ -535,7 +535,13 @@ function ConceptDetail() {
             );
       const existingRenderableSectionIds = new Set(
         images
-          .filter((img) => img.sectionId && img.status !== "failed" && (img.realUrl || img.previewUrl))
+          .filter(
+            (img) =>
+              img.sectionId &&
+              img.status !== "failed" &&
+              img.status !== "placeholder" &&
+              (img.realUrl || img.previewUrl),
+          )
           .map((img) => img.sectionId),
       );
       const heroUploads: GeneratedImagePreview[] =
