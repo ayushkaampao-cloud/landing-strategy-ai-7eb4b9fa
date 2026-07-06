@@ -111,13 +111,64 @@ export const FRAMEWORK_META: Record<TemplateFamily, FrameworkMeta> = {
 // press, guarantees, warehouse locations, shipping claims, or metrics.
 // ---------------------------------------------------------------------------
 
-const P = "Needs your input";
+const P = "Add verified proof here before publishing.";
+
+function splitInput(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(/\r?\n|·|•|\||;/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function sentence(value: string | undefined, fallback: string): string {
+  const clean = (value ?? "").trim();
+  return clean || fallback;
+}
+
+function benefitLine(p: Product): string {
+  return splitInput(p.keyBenefits)[0] ?? sentence(p.shortDescription, "make the buying decision clearer and easier");
+}
+
+function featureItems(p: Product): { title: string; body: string }[] {
+  const features = splitInput(p.keyFeatures);
+  const benefits = splitInput(p.keyBenefits);
+  const source = features.length > 0 ? features : benefits;
+  if (source.length === 0) {
+    return [
+      { title: "Clear product value", body: sentence(p.shortDescription, `${p.name} gives buyers a focused reason to choose you.`) },
+      { title: "Built around the use case", body: "Position the product around the real job your buyer is trying to get done." },
+      { title: "Lower-friction decision", body: "Answer the practical questions buyers need resolved before they click." },
+    ];
+  }
+  return source.slice(0, 5).map((item, i) => ({
+    title: item.replace(/^[-•]\s*/, ""),
+    body: benefits[i] ?? sentence(p.shortDescription, `A practical reason to consider ${p.name}.`),
+  }));
+}
+
+function faqItems(p: Product): { title: string; body: string }[] {
+  return [
+    {
+      title: `Who is ${p.name} best for?`,
+      body: sentence(p.shortDescription, `${p.name} is for buyers who want a clearer, more focused solution.`),
+    },
+    {
+      title: "What makes it different?",
+      body: splitInput(p.keyFeatures).slice(0, 3).join("; ") || "Use your strongest product details here to make the difference concrete.",
+    },
+    {
+      title: "What is the offer?",
+      body: p.priceInfo || "Add the current price, trial, bundle, or incentive here.",
+    },
+  ];
+}
 
 function s(props: Omit<SectionProps, "id">): SectionProps {
   return { id: uid(), placeholder: true, ...props };
 }
 
-function skeletonSections(family: TemplateFamily, p: Product, ws: Workspace): SectionProps[] {
+function skeletonSections(family: TemplateFamily, p: Product, ws: Workspace, project: Project): SectionProps[] {
   const types: Record<TemplateFamily, SectionType[]> = {
     "Performance Page": ["hero", "benefit-strip", "feature-grid", "social-proof", "offer", "faq", "cta"],
     "A+ Product Story": ["hero", "story", "feature-grid", "lifestyle", "details", "comparison", "faq", "cta"],
@@ -147,66 +198,106 @@ function skeletonSections(family: TemplateFamily, p: Product, ws: Workspace): Se
     ],
   };
 
+  const audience = ws.primaryAudience || "buyers who want a better way forward";
+  const features = featureItems(p);
+  const benefits = splitInput(p.keyBenefits);
   return types[family].map((type) => {
     switch (type) {
       case "hero":
         return s({
           type,
-          title: `Add hero headline for ${p.name}`,
-          subtitle: `Add hero subheadline for ${ws.primaryAudience || "your audience"}`,
-          ctaLabel: "Add CTA label",
+          title: `${p.name} for ${audience}`,
+          subtitle: sentence(
+            p.shortDescription,
+            `${p.name} helps ${audience} ${benefitLine(p)}.`,
+          ),
+          ctaLabel: project.goal === "Book calls" ? "Book a call" : project.goal === "Collect leads" ? "Get the guide" : "Shop now",
           proofNeeded: false,
+          placeholder: false,
         });
       case "benefit-strip":
-        return s({ type, bullets: [P, P, P, P] });
+        return s({
+          type,
+          bullets: benefits.length > 0 ? benefits.slice(0, 4) : [benefitLine(p), "Compare the product quickly", "Understand the offer", "Move forward with confidence"],
+          placeholder: false,
+        });
       case "feature-grid":
         return s({
           type,
-          title: "Add section headline",
-          items: [
-            { title: P, body: P },
-            { title: P, body: P },
-            { title: P, body: P },
-          ],
+          title: `What makes ${p.name} worth choosing`,
+          items: features,
+          placeholder: false,
         });
       case "problem-solution":
+        return s({
+          type,
+          title: project.mainProblem || `The problem ${p.name} is built to solve`,
+          body: `${sentence(p.shortDescription, `${p.name} gives buyers a clearer option.`)} ${benefits.length > 0 ? `The core outcome: ${benefits[0]}.` : "Use this section to connect the buyer's current frustration to your product's practical value."}`,
+          placeholder: false,
+        });
       case "story":
+        return s({
+          type,
+          title: `A focused product story from ${ws.name}`,
+          body: `${sentence(ws.brandDescription, `${ws.name} focuses on practical product experiences.`)} ${p.name} is positioned around ${audience}, with the page built to explain the value clearly before asking for action.`,
+          placeholder: false,
+        });
       case "lifestyle":
-        return s({ type, title: `Add ${type} headline`, body: P });
+        return s({
+          type,
+          title: `${p.name} in the moments that matter`,
+          body: `Show how ${p.name} fits into the buyer's real context: what they are trying to solve, what changes after purchase, and why the details matter.`,
+          placeholder: false,
+        });
       case "comparison":
         return s({
           type,
-          title: "Add comparison headline",
+          title: `${p.name} compared with the usual alternatives`,
           items: [
-            { title: "Alternative", body: P },
-            { title: p.name, body: P },
+            { title: "The usual way", body: project.competitor ? `Buyers may compare against ${project.competitor}, DIY workarounds, or delaying the decision.` : "Buyers may compare against cheaper alternatives, DIY workarounds, or doing nothing." },
+            { title: p.name, body: `${p.name} leads with ${benefitLine(p)}${features[0]?.title ? ` and backs it up with ${features[0].title}.` : "."}` },
           ],
+          placeholder: false,
         });
       case "social-proof":
         return s({
           type,
-          title: "Add real customer testimonial or verified metric here",
-          body: "Add real customer quote here",
+          title: "Add real customer testimonial or verified metric",
+          body: "Add real customer quote here before publishing.",
           highlight: "— Add verified attribution",
           proofNeeded: true,
         });
       case "faq":
         return s({
           type,
-          title: "Add FAQ headline",
-          items: [
-            { title: P, body: P },
-            { title: P, body: P },
-          ],
+          title: `Questions buyers ask before choosing ${p.name}`,
+          items: faqItems(p),
+          placeholder: false,
         });
       case "offer":
-        return s({ type, title: p.priceInfo || "Add offer headline", subtitle: P, ctaLabel: "Add CTA label" });
+        return s({
+          type,
+          title: p.priceInfo || `Get ${p.name}`,
+          subtitle: `${benefitLine(p)}. Make the offer, price, guarantee, or next step explicit here.`,
+          ctaLabel: project.goal === "Book calls" ? "Book a call" : project.goal === "Collect leads" ? "Claim the offer" : "Buy now",
+          placeholder: false,
+        });
       case "guarantee":
-        return s({ type, title: "Add guarantee headline (if you offer one)", body: P, proofNeeded: true });
+        return s({ type, title: "Add guarantee or risk-reversal terms", body: P, proofNeeded: true });
       case "details":
-        return s({ type, title: "Add specs / details headline", bullets: [P, P, P, P] });
+        return s({
+          type,
+          title: `${p.name} details buyers should know`,
+          bullets: splitInput(p.keyFeatures).length > 0 ? splitInput(p.keyFeatures) : [sentence(p.shortDescription, `${p.name} product details`)],
+          placeholder: false,
+        });
       case "cta":
-        return s({ type, title: "Add closing CTA headline", ctaLabel: "Add CTA label" });
+        return s({
+          type,
+          title: `Ready to choose ${p.name}?`,
+          ctaLabel: project.goal === "Book calls" ? "Book a call" : project.goal === "Collect leads" ? "Get started" : "Shop now",
+          placeholder: false,
+        });
     }
   });
 }
@@ -225,7 +316,7 @@ export function generateConceptsForProject(
       conceptName,
       oneLineStrategy,
       bestTrafficType: meta.bestTraffic,
-      sections: skeletonSections(family, product, ws),
+      sections: skeletonSections(family, product, ws, project),
     };
     return {
       id: uid(),
@@ -234,8 +325,8 @@ export function generateConceptsForProject(
       conceptName,
       oneLineStrategy,
       bestTrafficType: meta.bestTraffic,
-      whyThisWorks: "AI generation failed — this is a placeholder skeleton for you to fill in.",
-      risksOrLimits: "Placeholder only. Do not ship without replacing every field.",
+      whyThisWorks: "Generated from your saved product and brand inputs without using AI credits.",
+      risksOrLimits: "Proof-heavy sections still require verified testimonials, metrics, guarantees, or policy details before publishing.",
       schema,
       createdAt: new Date().toISOString(),
     };

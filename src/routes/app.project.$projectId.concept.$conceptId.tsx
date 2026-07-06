@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, SectionProps } from "@/types";
 import { resolveThemePalette } from "@/lib/theme/palette";
 import { downloadConceptZip } from "@/lib/downloadConceptZip";
+import { mergeElementsIntoSections } from "@/lib/landingPageElements";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -119,6 +120,16 @@ function ConceptDetail() {
   }, [images]);
   const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
+  const displaySections = useMemo(
+    () =>
+      concept
+        ? mergeElementsIntoSections(concept.schema.sections, elements, {
+            editedFields: getEditedFields(concept.id),
+          })
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [concept, elements, elementsVersion],
+  );
   // If the project uploaded product photos, use the first one directly as the
   // hero image instead of an AI-generated one. Other sections still use AI.
   const heroProductImage = useMemo(() => {
@@ -130,7 +141,7 @@ function ConceptDetail() {
     if (!concept) return imageBySection;
     if (!heroProductImage) return imageBySection;
     const map = { ...imageBySection };
-    concept.schema.sections.forEach((s) => {
+    displaySections.forEach((s) => {
       if (s.type === "hero") {
         map[s.id] = {
           sectionId: s.id,
@@ -145,7 +156,7 @@ function ConceptDetail() {
     });
 
     return map;
-  }, [concept, imageBySection, heroProductImage]);
+  }, [concept, displaySections, imageBySection, heroProductImage]);
 
   const theme = useMemo(() => {
     const stored = research?.classification?.themePalette;
@@ -177,7 +188,7 @@ function ConceptDetail() {
       `Best traffic: ${concept.bestTrafficType}`,
       "",
     ];
-    concept.schema.sections.forEach((s, i) => {
+    displaySections.forEach((s, i) => {
       lines.push(`## ${i + 1}. ${s.type.toUpperCase()}${s.title ? ` — ${s.title}` : ""}`);
       if (s.highlight) lines.push(`[${s.highlight}]`);
       if (s.subtitle) lines.push(s.subtitle);
@@ -191,7 +202,7 @@ function ConceptDetail() {
   };
 
   const heroText = () => {
-    const hero = concept.schema.sections.find((s) => s.type === "hero");
+    const hero = displaySections.find((s) => s.type === "hero");
     if (!hero) return "";
     return [hero.highlight, hero.title, hero.subtitle, hero.ctaLabel]
       .filter(Boolean)
@@ -199,7 +210,7 @@ function ConceptDetail() {
   };
 
   const outlineText = () =>
-    concept.schema.sections
+    displaySections
       .map((s, i) => `${i + 1}. ${s.type}${s.title ? ` — ${s.title}` : ""}`)
       .join("\n");
 
@@ -367,7 +378,7 @@ function ConceptDetail() {
   };
 
   async function handleGenerateRealImage(sectionId: string) {
-    const section = concept?.schema.sections.find((s) => s.id === sectionId);
+    const section = displaySections.find((s) => s.id === sectionId) ?? concept?.schema.sections.find((s) => s.id === sectionId);
     if (!section) return;
     if (section.type === "hero" && heroProductImage) return;
 
@@ -436,9 +447,12 @@ function ConceptDetail() {
         toast.success("Real image generated");
       }
     } catch (err) {
-      await updateImageForSection(conceptId, sectionId, { status: "failed" }).catch((saveErr) => {
-        console.error("[image] failed-status save", saveErr);
-      });
+      const existing = imageBySection[sectionId];
+      if (!existing?.previewUrl && !existing?.realUrl) {
+        await updateImageForSection(conceptId, sectionId, { status: "failed" }).catch((saveErr) => {
+          console.error("[image] failed-status save", saveErr);
+        });
+      }
       setImagesVersion((v) => v + 1);
       toast.error(`Image generation failed: ${(err as Error).message}`);
     } finally {
@@ -503,11 +517,11 @@ function ConceptDetail() {
     setImagesError(null);
     try {
       const negBySection: Record<string, string | undefined> = {};
-      concept!.schema.sections.forEach((s) => {
+      displaySections.forEach((s) => {
         negBySection[s.id] = s.negativePrompt;
       });
       const heroSectionIds = new Set(
-        concept!.schema.sections.filter((s) => s.type === "hero").map((s) => s.id),
+        displaySections.filter((s) => s.type === "hero").map((s) => s.id),
       );
       const skipHero = !!heroProductImage;
       const sectionsWithElementPrompts = new Set(
@@ -528,10 +542,35 @@ function ConceptDetail() {
                 negativePrompt: negBySection[sectionId],
               })),
             );
+      const existingRenderableSectionIds = new Set(
+        images
+          .filter(
+            (img) =>
+              img.sectionId &&
+              img.status !== "failed" &&
+              (img.realUrl || img.previewUrl),
+          )
+          .map((img) => img.sectionId),
+      );
+      const heroUploads: GeneratedImagePreview[] =
+        skipHero && heroProductImage
+          ? [...heroSectionIds].map((sectionId) => ({
+              sectionId,
+              imagePrompt: "Uploaded product photo",
+              imageStyle: "uploaded",
+              previewUrl: heroProductImage,
+              realUrl: heroProductImage,
+              status: "real" as const,
+              imageMode: "product_packshot" as const,
+              category: research?.classification?.category,
+            }))
+          : [];
       const items = [
         ...heroFallbackItems,
         ...elements.sections.flatMap((sec) =>
           (sec.imagePrompts ?? [])
+            .filter(() => sec.imageMode !== "no_image_needed")
+            .filter(() => !existingRenderableSectionIds.has(sec.sectionId))
             .filter(() => !(skipHero && heroSectionIds.has(sec.sectionId)))
             .map((p) => ({
               sectionId: sec.sectionId,
@@ -542,6 +581,16 @@ function ConceptDetail() {
             })),
         ),
       ];
+
+      if (items.length === 0) {
+        if (heroUploads.length > 0) {
+          await saveImages(conceptId, heroUploads);
+          setImagesVersion((v) => v + 1);
+        }
+        setImagesError(null);
+        toast.message("No missing section images to generate.");
+        return;
+      }
 
       const res = await fetch("/api/generate-images", {
         method: "POST",
@@ -555,12 +604,12 @@ function ConceptDetail() {
         }),
       });
       if (!res.ok) throw new Error("Image generation failed");
-      const data = (await res.json()) as { previews: GeneratedImagePreview[] };
-      await saveImages(conceptId, data.previews);
+      const data = (await res.json()) as { previews: GeneratedImagePreview[]; warning?: string };
+      await saveImages(conceptId, [...heroUploads, ...data.previews]);
       setImgFailed({});
       setImgRetry({});
       setImagesVersion((v) => v + 1);
-
+      if (data.warning) toast.message(data.warning);
     } catch (err) {
       setImagesError((err as Error).message);
     } finally {
@@ -605,7 +654,7 @@ function ConceptDetail() {
               </div>
             </div>
             <div style={{ background: theme.background }}>
-              {concept.schema.sections.map((s) => {
+              {displaySections.map((s) => {
                 const isHeroWithUpload = s.type === "hero" && !!heroProductImage;
                 const img = displayImageBySection[s.id];
                 const activeUrl = img?.realUrl || img?.previewUrl || "";
@@ -731,7 +780,7 @@ function ConceptDetail() {
               </div>
               <div className="p-3 bg-surface border border-border rounded-lg">
                 <div className="mono-tag text-muted-foreground mb-1">Sections</div>
-                <div className="text-xs font-medium">{concept.schema.sections.length} modules</div>
+                <div className="text-xs font-medium">{displaySections.length} modules</div>
               </div>
             </div>
 
@@ -776,11 +825,11 @@ function ConceptDetail() {
               <div className="flex items-center justify-between mb-3">
                 <div className="mono-tag text-muted-foreground">Content outline</div>
                 <div className="mono-tag text-muted-foreground">
-                  {concept.schema.sections.length}
+                  {displaySections.length}
                 </div>
               </div>
               <ol className="space-y-0.5">
-                {concept.schema.sections.map((s, i) => (
+                {displaySections.map((s, i) => (
                   <li key={s.id}>
                     <button
                       onClick={() => scrollTo(s.id)}
@@ -867,12 +916,12 @@ function ConceptDetail() {
                     {imagesLoading
                       ? "Generating preview visuals…"
                       : images.length > 0
-                        ? "↻ Regenerate images"
+                        ? "Generate missing images"
                         : "Generate images"}
                   </button>
                   {images.length > 0 && (
                     <div className="mono-tag text-muted-foreground text-center pt-1">
-                      {images.length} preview visuals attached · simulated
+                      {images.length} preview visual{images.length === 1 ? "" : "s"} attached
                     </div>
                   )}
                 </>
@@ -920,6 +969,7 @@ function ConceptDetail() {
                       images: Object.values(displayImageBySection),
                       project,
                       workspace,
+                      sections: displaySections,
                       onProgress: (done, total) => setDlProgress({ done, total }),
                     });
                     if (skipped.length > 0) {

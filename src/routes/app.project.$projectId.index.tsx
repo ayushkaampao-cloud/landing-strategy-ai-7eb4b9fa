@@ -5,6 +5,7 @@ import { FRAMEWORK_META, TEMPLATE_FAMILIES } from "@/lib/generator";
 import { VisualProfileSummary } from "@/components/VisualProfileSummary";
 import { GroundingBadge } from "@/components/GroundingBadge";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { mergeElementsIntoSections } from "@/lib/landingPageElements";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -15,7 +16,7 @@ export const Route = createFileRoute("/app/project/$projectId/")({
 function ProjectGallery() {
   const { projectId } = Route.useParams();
   const navigate = useNavigate();
-  const { projects, products, concepts, workspaces, getResearch, getProductImageCount, getVisualProfile, deleteProject, setActiveWorkspace } = useStore();
+  const { projects, products, concepts, workspaces, getResearch, getElements, getProductImageCount, getVisualProfile, deleteProject, setActiveWorkspace } = useStore();
   const project = projects.find((p) => p.id === projectId);
   const product = products.find((p) => p.id === project?.productId);
   const workspace = workspaces.find((w) => w.id === project?.workspaceId);
@@ -211,7 +212,8 @@ function ProjectGallery() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {ordered.map((c) => {
             const meta = FRAMEWORK_META[c.templateFamily];
-            const hero = c.schema.sections.find((s) => s.type === "hero");
+            const displaySections = mergeElementsIntoSections(c.schema.sections, getElements(c.id));
+            const hero = displaySections.find((s) => s.type === "hero");
             return (
               <Link
                 key={c.id}

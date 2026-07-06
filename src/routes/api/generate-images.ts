@@ -165,7 +165,7 @@ async function generateOne(args: {
   refImages: string[];
   projectId: string | undefined;
   category?: ProjectCategory;
-}): Promise<GeneratedImagePreview> {
+}): Promise<{ preview: GeneratedImagePreview; stopReason?: "credits" }> {
   const { apiKey, item, refImages, projectId, category } = args;
   const mode: ImageMode = item.imageMode ?? inferMode(item.imagePrompt);
 
@@ -174,14 +174,16 @@ async function generateOne(args: {
   // guarantees the hero shows the actual product.
   if (mode === "product_packshot" && refImages.length > 0) {
     return {
-      sectionId: item.sectionId,
-      imagePrompt: "Uploaded product photo",
-      imageStyle: item.imageStyle ?? "uploaded",
-      previewUrl: refImages[0],
-      realUrl: refImages[0],
-      status: "real",
-      imageMode: mode,
-      category,
+      preview: {
+        sectionId: item.sectionId,
+        imagePrompt: "Uploaded product photo",
+        imageStyle: item.imageStyle ?? "uploaded",
+        previewUrl: refImages[0],
+        realUrl: refImages[0],
+        status: "real" as const,
+        imageMode: mode,
+        category,
+      },
     };
   }
 
@@ -192,9 +194,12 @@ async function generateOne(args: {
     contentBlocks.push({ type: "image_url", image_url: { url: dataUrl } });
   }
 
-  const failed = (label: string): GeneratedImagePreview => {
+  const failed = (label: string): { preview: GeneratedImagePreview; stopReason?: "credits" } => {
     console.warn(`[generate-images] section=${item.sectionId} failed: ${label}`);
-    return fallbackPreview(item, category);
+    return {
+      preview: fallbackPreview(item, category),
+      stopReason: /(^|\s)402\b|credit|billing/i.test(label) ? "credits" : undefined,
+    };
   };
 
   const controller = new AbortController();
@@ -237,13 +242,15 @@ async function generateOne(args: {
     if (signErr || !signed?.signedUrl) return failed(`sign url: ${signErr?.message ?? "no url"}`);
 
     return {
-      sectionId: item.sectionId,
-      imagePrompt: item.imagePrompt,
-      imageStyle: item.imageStyle ?? "",
-      previewUrl: signed.signedUrl,
-      status: "generated",
-      imageMode: mode,
-      category,
+      preview: {
+        sectionId: item.sectionId,
+        imagePrompt: item.imagePrompt,
+        imageStyle: item.imageStyle ?? "",
+        previewUrl: signed.signedUrl,
+        status: "generated" as const,
+        imageMode: mode,
+        category,
+      },
     };
   } catch (err) {
     return failed((err as Error).message || "unknown error");
@@ -274,12 +281,29 @@ export const Route = createFileRoute("/api/generate-images")({
 
         const refImages = await loadReferenceImages(body.projectId);
 
-        const previews = await Promise.all(
-          (body.items ?? []).map((item) =>
-            generateOne({ apiKey, item, refImages, projectId: body.projectId, category: body.category }),
-          ),
-        );
-        return Response.json({ previews });
+        const previews: GeneratedImagePreview[] = [];
+        let stoppedForCredits = false;
+        for (const item of body.items ?? []) {
+          if (stoppedForCredits) {
+            previews.push(fallbackPreview(item, body.category));
+            continue;
+          }
+          const result = await generateOne({
+            apiKey,
+            item,
+            refImages,
+            projectId: body.projectId,
+            category: body.category,
+          });
+          previews.push(result.preview);
+          if (result.stopReason === "credits") stoppedForCredits = true;
+        }
+        return Response.json({
+          previews,
+          warning: stoppedForCredits
+            ? "Image generation is unavailable because workspace AI credits are exhausted. Showing branded placeholders instead."
+            : undefined,
+        });
       },
     },
   },
