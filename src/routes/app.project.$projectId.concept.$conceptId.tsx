@@ -368,14 +368,33 @@ function ConceptDetail() {
 
   async function handleGenerateRealImage(sectionId: string) {
     const section = concept?.schema.sections.find((s) => s.id === sectionId);
-    if (section?.type === "hero" && heroProductImage) return;
-    const img = imageBySection[sectionId];
-    if (!img) return;
+    if (!section) return;
+    if (section.type === "hero" && heroProductImage) return;
+
+    // Prefer the elements record; fall back to the section's own prompt.
+    const elementSec = elements?.sections.find((es) => es.sectionId === sectionId);
+    const promptFromElements = elementSec?.imagePrompts?.[0];
+    const promptFromHero =
+      section.type === "hero" ? elements?.hero.imagePrompts?.[0] : undefined;
+    const imagePrompt =
+      imageBySection[sectionId]?.imagePrompt ||
+      promptFromElements ||
+      promptFromHero ||
+      section.imagePrompt ||
+      `${section.type} visual for ${product!.name}`;
+    const imageStyle =
+      imageBySection[sectionId]?.imageStyle ||
+      elements?.globalStyle.imageStyle ||
+      section.imageStyle ||
+      "Branded, on-palette";
+    const imageMode =
+      imageBySection[sectionId]?.imageMode ||
+      elementSec?.imageMode ||
+      section.imageMode ||
+      (section.type === "hero" ? "product_packshot" : "abstract_brand_texture");
 
     setRealGenerating((s) => ({ ...s, [sectionId]: true }));
     try {
-      // section resolved above
-
       const res = await fetch("/api/generate-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -387,10 +406,10 @@ function ConceptDetail() {
           items: [
             {
               sectionId,
-              imagePrompt: img.imagePrompt,
-              imageStyle: img.imageStyle,
-              imageMode: img.imageMode,
-              negativePrompt: section?.negativePrompt,
+              imagePrompt,
+              imageStyle,
+              imageMode,
+              negativePrompt: section.negativePrompt,
             },
           ],
         }),
@@ -403,7 +422,7 @@ function ConceptDetail() {
       }
       await updateImageForSection(conceptId, sectionId, {
         previewUrl: preview.previewUrl,
-        realUrl: preview.status === "generated" ? preview.previewUrl : undefined,
+        realUrl: preview.status === "real" || preview.status === "generated" ? preview.previewUrl : undefined,
         status: preview.status === "generated" ? "real" : preview.status,
         imagePrompt: preview.imagePrompt,
         imageStyle: preview.imageStyle,
@@ -618,18 +637,19 @@ function ConceptDetail() {
                         getFieldSaveError(concept.id, `sections.${s.id}.${path}`)
                       }
                     />
-                    {img && (
-                      <div
-                        className="px-6 md:px-12 py-2 flex items-center justify-between text-[11px] gap-2 border-t"
-                        style={{
-                          background: theme.surface,
-                          color: theme.mutedText,
-                          borderColor: `${theme.primary}22`,
-                        }}
-                      >
-                        <span className="mono-tag">
-                          {isHeroWithUpload
-                            ? "Using uploaded product photo"
+                    <div
+                      className="px-6 md:px-12 py-2 flex items-center justify-between text-[11px] gap-2 border-t"
+                      style={{
+                        background: theme.surface,
+                        color: theme.mutedText,
+                        borderColor: `${theme.primary}22`,
+                      }}
+                    >
+                      <span className="mono-tag">
+                        {isHeroWithUpload
+                          ? "Using uploaded product photo"
+                          : !img
+                            ? "No image yet"
                             : img.status === "real"
                             ? "Real image · AI-generated"
                             : img.status === "failed"
@@ -637,39 +657,44 @@ function ConceptDetail() {
                               : img.status === "placeholder"
                                 ? `Branded placeholder · ${img.imageMode ?? "image"}`
                                 : "Preview image · Generated"}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {showFailed && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setImgFailed((m) => ({ ...m, [s.id]: false }));
-                                setImgRetry((m) => ({ ...m, [s.id]: (m[s.id] ?? 0) + 1 }));
-                              }}
-                              className="mono-tag px-2 py-0.5 rounded"
-                              style={{ background: theme.primary, color: "#fff" }}
-                            >
-                              Retry image
-                            </button>
-                          )}
-                          {!isHeroWithUpload && img.status !== "real" && (
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateRealImage(s.id)}
-                              disabled={!!realGenerating[s.id]}
-                              className="mono-tag px-2 py-0.5 rounded disabled:opacity-50"
-                              style={{ background: theme.accent, color: "#fff" }}
-                            >
-                              {realGenerating[s.id] ? "Generating…" : "Generate real image"}
-                            </button>
-                          )}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {showFailed && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImgFailed((m) => ({ ...m, [s.id]: false }));
+                              setImgRetry((m) => ({ ...m, [s.id]: (m[s.id] ?? 0) + 1 }));
+                            }}
+                            className="mono-tag px-2 py-0.5 rounded"
+                            style={{ background: theme.primary, color: "#fff" }}
+                          >
+                            Retry image
+                          </button>
+                        )}
+                        {!isHeroWithUpload && img?.status !== "real" && (
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateRealImage(s.id)}
+                            disabled={!!realGenerating[s.id]}
+                            className="mono-tag px-2 py-0.5 rounded disabled:opacity-50"
+                            style={{ background: theme.accent, color: "#fff" }}
+                          >
+                            {realGenerating[s.id]
+                              ? "Generating…"
+                              : img
+                                ? "Generate real image"
+                                : "Generate image"}
+                          </button>
+                        )}
 
+                        {img?.imagePrompt && (
                           <span className="truncate max-w-[40%]" title={img.imagePrompt}>
                             {img.imagePrompt}
                           </span>
-                        </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 );
               })}

@@ -562,7 +562,7 @@ function LifestyleSection({ ctx }: { ctx: SectionCtx }) {
 function ComparisonSection({ ctx }: { ctx: SectionCtx }) {
   const { theme, section: s } = ctx;
   const { E, renderItem } = useEditables(ctx);
-  const primaryText = contrastText(theme.primary);
+  const accentText = contrastText(theme.accent);
   return (
     <section
       className="px-6 md:px-12 py-20 md:py-24"
@@ -587,9 +587,10 @@ function ComparisonSection({ ctx }: { ctx: SectionCtx }) {
                 style={
                   isOurs
                     ? {
-                        background: theme.primary,
-                        color: primaryText,
-                        boxShadow: `0 10px 30px -15px ${withAlpha(theme.primary, 0.35)}`,
+                        background: theme.surface,
+                        color: theme.text,
+                        border: `1px solid ${withAlpha(theme.accent, 0.45)}`,
+                        boxShadow: `0 10px 30px -18px ${withAlpha(theme.accent, 0.35)}`,
                       }
                     : {
                         background: theme.surface,
@@ -599,10 +600,12 @@ function ComparisonSection({ ctx }: { ctx: SectionCtx }) {
                 }
               >
                 <div
-                  className="mono-tag mb-3 text-[10px] tracking-[0.15em] uppercase"
-                  style={{
-                    color: isOurs ? theme.accent : theme.mutedText,
-                  }}
+                  className="mono-tag mb-3 inline-flex items-center px-2 py-0.5 rounded text-[10px] tracking-[0.15em] uppercase"
+                  style={
+                    isOurs
+                      ? { background: theme.accent, color: accentText }
+                      : { color: theme.mutedText }
+                  }
                 >
                   {isOurs ? "Our approach" : "Old way"}
                 </div>
