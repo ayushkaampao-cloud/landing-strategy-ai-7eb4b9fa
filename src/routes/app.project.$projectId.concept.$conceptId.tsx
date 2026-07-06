@@ -433,8 +433,9 @@ function ConceptDetail() {
     setElementsLoading(true);
     setElementsError(null);
     setElementsStep(1);
+    let stepTimer: ReturnType<typeof setInterval> | undefined;
     try {
-      const stepTimer = setInterval(() => setElementsStep((s) => Math.min(s + 1, 4)), 700);
+      stepTimer = setInterval(() => setElementsStep((s) => Math.min(s + 1, 4)), 700);
       const res = await fetch("/api/generate-elements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -455,7 +456,6 @@ function ConceptDetail() {
           visualProfile: visualProfile ?? undefined,
         }),
       });
-      clearInterval(stepTimer);
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
         console.error("[elements] api error:", res.status, detail);
@@ -473,6 +473,7 @@ function ConceptDetail() {
     } catch (err) {
       setElementsError((err as Error).message);
     } finally {
+      if (stepTimer) clearInterval(stepTimer);
       setElementsLoading(false);
     }
   }
