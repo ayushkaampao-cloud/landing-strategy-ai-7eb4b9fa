@@ -168,6 +168,23 @@ async function generateOne(args: {
 }): Promise<GeneratedImagePreview> {
   const { apiKey, item, refImages, projectId, category } = args;
   const mode: ImageMode = item.imageMode ?? inferMode(item.imagePrompt);
+
+  // Hero / product packshot: if the project uploaded product photos, use the
+  // first one directly instead of calling the image model. Saves credits and
+  // guarantees the hero shows the actual product.
+  if (mode === "product_packshot" && refImages.length > 0) {
+    return {
+      sectionId: item.sectionId,
+      imagePrompt: "Uploaded product photo",
+      imageStyle: item.imageStyle ?? "uploaded",
+      previewUrl: refImages[0],
+      realUrl: refImages[0],
+      status: "real",
+      imageMode: mode,
+      category,
+    };
+  }
+
   const instruction = buildInstruction(item.imagePrompt, item.negativePrompt, refImages.length > 0);
 
   const contentBlocks: Array<Record<string, unknown>> = [{ type: "text", text: instruction }];
