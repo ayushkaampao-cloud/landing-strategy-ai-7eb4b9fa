@@ -63,7 +63,7 @@ function makePlaceholderDataUrl(sectionId: string, mode: ImageMode): string {
   <text x="640" y="430" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#7b4b35" font-weight="700">Visual placeholder</text>
   <text x="640" y="486" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#9a6a52">${label}</text>
 </svg>`;
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`;
 }
 
 /** Extract the first base64 image payload. The dedicated image endpoint
@@ -144,9 +144,10 @@ async function loadReferenceImages(projectId: string | undefined): Promise<strin
       .from("product_visual_profiles")
       .select("source_image_urls")
       .eq("project_id", projectId)
-      .maybeSingle();
-    if (error || !data?.source_image_urls) return [];
-    const arr = data.source_image_urls as unknown as Array<{ dataUrl?: string }>;
+      .limit(1);
+    const row = data?.[0];
+    if (error || !row?.source_image_urls) return [];
+    const arr = row.source_image_urls as unknown as Array<{ dataUrl?: string }>;
     if (!Array.isArray(arr)) return [];
     return arr
       .map((r) => r?.dataUrl)
@@ -207,7 +208,7 @@ async function generateOne(args: {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const ext = img.mime.includes("jpeg") ? "jpg" : img.mime.includes("webp") ? "webp" : "png";
     const path = `generated/${projectId ?? "unknown"}/${item.sectionId}-${Date.now()}.${ext}`;
-    const bytes = Uint8Array.from(atob(img.b64), (c) => c.charCodeAt(0));
+    const bytes = Uint8Array.from(Buffer.from(img.b64, "base64"));
     const { error: upErr } = await supabaseAdmin.storage
       .from("generated-images")
       .upload(path, bytes, { contentType: img.mime, upsert: true });
