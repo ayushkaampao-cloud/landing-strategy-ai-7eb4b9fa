@@ -548,7 +548,6 @@ function ConceptDetail() {
             (img) =>
               img.sectionId &&
               img.status !== "failed" &&
-              img.status !== "placeholder" &&
               (img.realUrl || img.previewUrl),
           )
           .map((img) => img.sectionId),
