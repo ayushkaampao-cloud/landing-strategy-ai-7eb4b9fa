@@ -63,7 +63,7 @@ function makePlaceholderDataUrl(sectionId: string, mode: ImageMode): string {
   <text x="640" y="430" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#7b4b35" font-weight="700">Visual placeholder</text>
   <text x="640" y="486" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#9a6a52">${label}</text>
 </svg>`;
-  return `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
 }
 
 /** Extract the first base64 image payload. The dedicated image endpoint
@@ -208,7 +208,7 @@ async function generateOne(args: {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const ext = img.mime.includes("jpeg") ? "jpg" : img.mime.includes("webp") ? "webp" : "png";
     const path = `generated/${projectId ?? "unknown"}/${item.sectionId}-${Date.now()}.${ext}`;
-    const bytes = Uint8Array.from(Buffer.from(img.b64, "base64"));
+    const bytes = Uint8Array.from(atob(img.b64), (c) => c.charCodeAt(0));
     const { error: upErr } = await supabaseAdmin.storage
       .from("generated-images")
       .upload(path, bytes, { contentType: img.mime, upsert: true });
