@@ -127,9 +127,9 @@ function EditProject() {
     }
     setSavingPhotos(true);
     try {
-      saveProductImages(projectId, images);
+      await saveProductImages(projectId, images);
       if (images.length === 0) {
-        saveVisualProfile(projectId, null);
+        await saveVisualProfile(projectId, null);
         toast.success("Photos cleared");
         return;
       }
@@ -145,7 +145,7 @@ function EditProject() {
         const data = (await res.json()) as {
           profile: import("@/types").ProductVisualProfile | null;
         };
-        saveVisualProfile(projectId, data.profile);
+        await saveVisualProfile(projectId, data.profile);
         toast.success("Product photos re-analyzed ✓");
       } else {
         toast.message("Photos saved — re-analysis failed, keeping previous summary.");
