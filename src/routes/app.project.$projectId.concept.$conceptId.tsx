@@ -446,9 +446,12 @@ function ConceptDetail() {
         console.error("[elements] api error:", res.status, detail);
         throw new Error("Content generation is temporarily unavailable — please try again in a moment.");
       }
-      const data = (await res.json()) as LandingPageElements;
+      const data = (await res.json()) as LandingPageElements & { fallback?: boolean; error?: string };
+      if (data.fallback) {
+        toast.message("Elements generated with local fallback because AI is unavailable.");
+      }
 
-      saveElements(conceptId, data);
+      await saveElements(conceptId, data);
       setElementsVersion((v) => v + 1);
       setElementsStep(4);
     } catch (err) {
@@ -506,7 +509,7 @@ function ConceptDetail() {
       });
       if (!res.ok) throw new Error("Image generation failed");
       const data = (await res.json()) as { previews: GeneratedImagePreview[] };
-      saveImages(conceptId, data.previews);
+      await saveImages(conceptId, data.previews);
       setImgFailed({});
       setImgRetry({});
       setImagesVersion((v) => v + 1);
