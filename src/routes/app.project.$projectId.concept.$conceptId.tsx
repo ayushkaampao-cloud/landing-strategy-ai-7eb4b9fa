@@ -637,18 +637,19 @@ function ConceptDetail() {
                         getFieldSaveError(concept.id, `sections.${s.id}.${path}`)
                       }
                     />
-                    {img && (
-                      <div
-                        className="px-6 md:px-12 py-2 flex items-center justify-between text-[11px] gap-2 border-t"
-                        style={{
-                          background: theme.surface,
-                          color: theme.mutedText,
-                          borderColor: `${theme.primary}22`,
-                        }}
-                      >
-                        <span className="mono-tag">
-                          {isHeroWithUpload
-                            ? "Using uploaded product photo"
+                    <div
+                      className="px-6 md:px-12 py-2 flex items-center justify-between text-[11px] gap-2 border-t"
+                      style={{
+                        background: theme.surface,
+                        color: theme.mutedText,
+                        borderColor: `${theme.primary}22`,
+                      }}
+                    >
+                      <span className="mono-tag">
+                        {isHeroWithUpload
+                          ? "Using uploaded product photo"
+                          : !img
+                            ? "No image yet"
                             : img.status === "real"
                             ? "Real image · AI-generated"
                             : img.status === "failed"
@@ -656,39 +657,44 @@ function ConceptDetail() {
                               : img.status === "placeholder"
                                 ? `Branded placeholder · ${img.imageMode ?? "image"}`
                                 : "Preview image · Generated"}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {showFailed && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setImgFailed((m) => ({ ...m, [s.id]: false }));
-                                setImgRetry((m) => ({ ...m, [s.id]: (m[s.id] ?? 0) + 1 }));
-                              }}
-                              className="mono-tag px-2 py-0.5 rounded"
-                              style={{ background: theme.primary, color: "#fff" }}
-                            >
-                              Retry image
-                            </button>
-                          )}
-                          {!isHeroWithUpload && img.status !== "real" && (
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateRealImage(s.id)}
-                              disabled={!!realGenerating[s.id]}
-                              className="mono-tag px-2 py-0.5 rounded disabled:opacity-50"
-                              style={{ background: theme.accent, color: "#fff" }}
-                            >
-                              {realGenerating[s.id] ? "Generating…" : "Generate real image"}
-                            </button>
-                          )}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {showFailed && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImgFailed((m) => ({ ...m, [s.id]: false }));
+                              setImgRetry((m) => ({ ...m, [s.id]: (m[s.id] ?? 0) + 1 }));
+                            }}
+                            className="mono-tag px-2 py-0.5 rounded"
+                            style={{ background: theme.primary, color: "#fff" }}
+                          >
+                            Retry image
+                          </button>
+                        )}
+                        {!isHeroWithUpload && img?.status !== "real" && (
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateRealImage(s.id)}
+                            disabled={!!realGenerating[s.id]}
+                            className="mono-tag px-2 py-0.5 rounded disabled:opacity-50"
+                            style={{ background: theme.accent, color: "#fff" }}
+                          >
+                            {realGenerating[s.id]
+                              ? "Generating…"
+                              : img
+                                ? "Generate real image"
+                                : "Generate image"}
+                          </button>
+                        )}
 
+                        {img?.imagePrompt && (
                           <span className="truncate max-w-[40%]" title={img.imagePrompt}>
                             {img.imagePrompt}
                           </span>
-                        </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 );
               })}
