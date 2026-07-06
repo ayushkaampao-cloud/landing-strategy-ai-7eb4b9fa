@@ -182,7 +182,7 @@ function ConceptDetail() {
       `Best traffic: ${concept.bestTrafficType}`,
       "",
     ];
-    concept.schema.sections.forEach((s, i) => {
+    displaySections.forEach((s, i) => {
       lines.push(`## ${i + 1}. ${s.type.toUpperCase()}${s.title ? ` — ${s.title}` : ""}`);
       if (s.highlight) lines.push(`[${s.highlight}]`);
       if (s.subtitle) lines.push(s.subtitle);
@@ -196,7 +196,7 @@ function ConceptDetail() {
   };
 
   const heroText = () => {
-    const hero = concept.schema.sections.find((s) => s.type === "hero");
+    const hero = displaySections.find((s) => s.type === "hero");
     if (!hero) return "";
     return [hero.highlight, hero.title, hero.subtitle, hero.ctaLabel]
       .filter(Boolean)
@@ -204,7 +204,7 @@ function ConceptDetail() {
   };
 
   const outlineText = () =>
-    concept.schema.sections
+    displaySections
       .map((s, i) => `${i + 1}. ${s.type}${s.title ? ` — ${s.title}` : ""}`)
       .join("\n");
 
@@ -538,6 +538,19 @@ function ConceptDetail() {
           .filter((img) => img.sectionId && img.status !== "failed" && (img.realUrl || img.previewUrl))
           .map((img) => img.sectionId),
       );
+      const heroUploads: GeneratedImagePreview[] =
+        skipHero && heroProductImage
+          ? [...heroSectionIds].map((sectionId) => ({
+              sectionId,
+              imagePrompt: "Uploaded product photo",
+              imageStyle: "uploaded",
+              previewUrl: heroProductImage,
+              realUrl: heroProductImage,
+              status: "real" as const,
+              imageMode: "product_packshot" as const,
+              category: research?.classification?.category,
+            }))
+          : [];
       const items = [
         ...heroFallbackItems,
         ...elements.sections.flatMap((sec) =>
@@ -556,6 +569,10 @@ function ConceptDetail() {
       ];
 
       if (items.length === 0) {
+        if (heroUploads.length > 0) {
+          await saveImages(conceptId, heroUploads);
+          setImagesVersion((v) => v + 1);
+        }
         setImagesError(null);
         toast.message("No missing section images to generate.");
         return;
@@ -574,7 +591,7 @@ function ConceptDetail() {
       });
       if (!res.ok) throw new Error("Image generation failed");
       const data = (await res.json()) as { previews: GeneratedImagePreview[] };
-      await saveImages(conceptId, data.previews);
+      await saveImages(conceptId, [...heroUploads, ...data.previews]);
       setImgFailed({});
       setImgRetry({});
       setImagesVersion((v) => v + 1);
@@ -749,7 +766,7 @@ function ConceptDetail() {
               </div>
               <div className="p-3 bg-surface border border-border rounded-lg">
                 <div className="mono-tag text-muted-foreground mb-1">Sections</div>
-                <div className="text-xs font-medium">{concept.schema.sections.length} modules</div>
+                <div className="text-xs font-medium">{displaySections.length} modules</div>
               </div>
             </div>
 
@@ -885,12 +902,12 @@ function ConceptDetail() {
                     {imagesLoading
                       ? "Generating preview visuals…"
                       : images.length > 0
-                        ? "↻ Regenerate images"
+                        ? "Generate missing images"
                         : "Generate images"}
                   </button>
                   {images.length > 0 && (
                     <div className="mono-tag text-muted-foreground text-center pt-1">
-                      {images.length} preview visuals attached · simulated
+                      {images.length} preview visual{images.length === 1 ? "" : "s"} attached
                     </div>
                   )}
                 </>
