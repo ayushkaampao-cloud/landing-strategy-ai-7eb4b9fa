@@ -26,8 +26,16 @@ function shouldReplaceItems(section: SectionProps): boolean {
   return items.every((item) => isPlaceholderText(item.title) || isPlaceholderText(item.body));
 }
 
-function generatedText(value: string | undefined, fallback: string | undefined): string | undefined {
-  if (!isPlaceholderText(fallback)) return fallback;
+interface MergeOptions {
+  editedFields?: Record<string, boolean>;
+}
+
+function generatedText(
+  value: string | undefined,
+  fallback: string | undefined,
+  preserveFallback?: boolean,
+): string | undefined {
+  if (preserveFallback) return fallback;
   return value && value.trim().length > 0 ? value : fallback;
 }
 
@@ -37,7 +45,20 @@ function shouldReplaceBullets(section: SectionProps): boolean {
   return bullets.every(isPlaceholderText);
 }
 
-function mergeSectionElement(section: SectionProps, element: LandingPageElementsSection | undefined): SectionProps {
+function isEdited(
+  editedFields: Record<string, boolean> | undefined,
+  sectionId: string,
+  field: string,
+): boolean {
+  const prefix = `sections.${sectionId}.${field}`;
+  return Object.keys(editedFields ?? {}).some((path) => path === prefix || path.startsWith(`${prefix}.`));
+}
+
+function mergeSectionElement(
+  section: SectionProps,
+  element: LandingPageElementsSection | undefined,
+  options: MergeOptions = {},
+): SectionProps {
   if (!element) return section;
 
   const itemDriven =
@@ -46,7 +67,9 @@ function mergeSectionElement(section: SectionProps, element: LandingPageElements
     section.type === "comparison";
   const elementBullets = element.bullets ?? [];
   const nextItems =
-    itemDriven && shouldReplaceItems(section) && elementBullets.length > 0
+    isEdited(options.editedFields, section.id, "items")
+      ? section.items
+    : itemDriven && elementBullets.length > 0
       ? elementBullets.map(parseBulletToItem)
       : itemDriven && shouldReplaceItems(section) && element.body
         ? [{ title: element.headline || section.title || "Details", body: element.body }]
@@ -54,15 +77,17 @@ function mergeSectionElement(section: SectionProps, element: LandingPageElements
 
   return {
     ...section,
-    title: generatedText(element.headline, section.title),
-    subtitle: generatedText(element.subheadline, section.subtitle),
-    body: generatedText(element.body, section.body),
+    title: generatedText(element.headline, section.title, isEdited(options.editedFields, section.id, "title")),
+    subtitle: generatedText(element.subheadline, section.subtitle, isEdited(options.editedFields, section.id, "subtitle")),
+    body: generatedText(element.body, section.body, isEdited(options.editedFields, section.id, "body")),
     bullets: itemDriven
       ? section.bullets
-      : shouldReplaceBullets(section)
+      : isEdited(options.editedFields, section.id, "bullets")
+        ? section.bullets
+        : element.bullets && element.bullets.length > 0
         ? element.bullets ?? section.bullets
         : section.bullets,
-    ctaLabel: generatedText(element.cta, section.ctaLabel),
+    ctaLabel: generatedText(element.cta, section.ctaLabel, isEdited(options.editedFields, section.id, "ctaLabel")),
     imagePrompt: element.imagePrompts?.[0] ?? section.imagePrompt,
     imageMode: element.imageMode ?? section.imageMode,
     negativePrompt: element.negativePrompt ?? section.negativePrompt,
@@ -75,6 +100,7 @@ function mergeSectionElement(section: SectionProps, element: LandingPageElements
 export function mergeElementsIntoSections(
   sections: SectionProps[],
   elements: LandingPageElements | null,
+  options: MergeOptions = {},
 ): SectionProps[] {
   if (!elements) return sections;
 
@@ -85,10 +111,10 @@ export function mergeElementsIntoSections(
       return mergeSectionElement(
         {
           ...section,
-          title: generatedText(elements.hero.headline, section.title),
-          subtitle: generatedText(elements.hero.subheadline, section.subtitle),
-          ctaLabel: generatedText(elements.hero.primaryCTA, section.ctaLabel),
-          ctaSecondaryLabel: generatedText(elements.hero.secondaryCTA, section.ctaSecondaryLabel),
+          title: generatedText(elements.hero.headline, section.title, isEdited(options.editedFields, section.id, "title")),
+          subtitle: generatedText(elements.hero.subheadline, section.subtitle, isEdited(options.editedFields, section.id, "subtitle")),
+          ctaLabel: generatedText(elements.hero.primaryCTA, section.ctaLabel, isEdited(options.editedFields, section.id, "ctaLabel")),
+          ctaSecondaryLabel: generatedText(elements.hero.secondaryCTA, section.ctaSecondaryLabel, isEdited(options.editedFields, section.id, "ctaSecondaryLabel")),
           imagePrompt: elements.hero.imagePrompts?.[0] ?? section.imagePrompt,
           imageMode: heroElement?.imageMode ?? section.imageMode ?? "product_packshot",
           negativePrompt: heroElement?.negativePrompt ?? section.negativePrompt,
@@ -96,8 +122,9 @@ export function mergeElementsIntoSections(
           proofNeeded: heroElement?.proofNeeded ?? section.proofNeeded,
         },
         heroElement,
+        options,
       );
     }
-    return mergeSectionElement(section, byId.get(section.id));
+    return mergeSectionElement(section, byId.get(section.id), options);
   });
 }
