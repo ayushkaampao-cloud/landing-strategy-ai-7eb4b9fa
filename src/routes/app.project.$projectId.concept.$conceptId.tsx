@@ -447,9 +447,12 @@ function ConceptDetail() {
         toast.success("Real image generated");
       }
     } catch (err) {
-      await updateImageForSection(conceptId, sectionId, { status: "failed" }).catch((saveErr) => {
-        console.error("[image] failed-status save", saveErr);
-      });
+      const existing = imageBySection[sectionId];
+      if (!existing?.previewUrl && !existing?.realUrl) {
+        await updateImageForSection(conceptId, sectionId, { status: "failed" }).catch((saveErr) => {
+          console.error("[image] failed-status save", saveErr);
+        });
+      }
       setImagesVersion((v) => v + 1);
       toast.error(`Image generation failed: ${(err as Error).message}`);
     } finally {
