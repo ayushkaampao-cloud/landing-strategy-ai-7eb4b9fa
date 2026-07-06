@@ -609,14 +609,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const user = dataRef.current.user;
     if (!user) throw new Error("Please sign in before creating a project.");
     const id = uid();
+    const { product: inputProduct, ...projectInput } = input;
     const project: Project = {
-      ...input,
+      ...projectInput,
       id,
       productId: id,
       createdAt: new Date().toISOString(),
     };
     const product =
-      input.product ?? dataRef.current.products.find((pr) => pr.id === input.productId);
+      inputProduct ?? dataRef.current.products.find((pr) => pr.id === input.productId);
     const persistedProduct = product ? { ...product, id } : undefined;
     const { error } = await supabase
       .from("projects")
