@@ -68,10 +68,12 @@ interface StoreContextValue extends AppData {
   signOut: () => Promise<void>;
   createWorkspace: (
     input: Omit<Workspace, "id" | "ownerId" | "createdAt">,
-  ) => Workspace;
+  ) => Promise<Workspace>;
   setActiveWorkspace: (id: string) => void;
   createProduct: (input: Omit<Product, "id" | "createdAt">) => Product;
-  createProject: (input: Omit<Project, "id" | "createdAt">) => Project;
+  createProject: (
+    input: Omit<Project, "id" | "createdAt"> & { product?: Product },
+  ) => Promise<Project>;
   updateProjectBrief: (
     projectId: string,
     patch: {
@@ -111,11 +113,11 @@ interface StoreContextValue extends AppData {
   disableConceptShare: (conceptId: string) => Promise<void>;
   activeWorkspace: Workspace | null;
   getResearch: (projectId: string) => ProjectResearch | null;
-  saveResearch: (projectId: string, r: ProjectResearch) => void;
+  saveResearch: (projectId: string, r: ProjectResearch) => Promise<void>;
   getElements: (conceptId: string) => LandingPageElements | null;
-  saveElements: (conceptId: string, e: LandingPageElements) => void;
+  saveElements: (conceptId: string, e: LandingPageElements) => Promise<void>;
   getImages: (conceptId: string) => GeneratedImagePreview[];
-  saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => void;
+  saveImages: (conceptId: string, imgs: GeneratedImagePreview[]) => Promise<void>;
   updateImageForSection: (
     conceptId: string,
     sectionId: string,
@@ -123,10 +125,10 @@ interface StoreContextValue extends AppData {
   ) => void;
   getProductImages: (projectId: string) => ProductImageRef[];
   loadProductImages: (projectId: string) => Promise<ProductImageRef[]>;
-  saveProductImages: (projectId: string, imgs: ProductImageRef[]) => void;
+  saveProductImages: (projectId: string, imgs: ProductImageRef[]) => Promise<void>;
   getProductImageCount: (projectId: string) => number;
   getVisualProfile: (projectId: string) => ProductVisualProfile | null;
-  saveVisualProfile: (projectId: string, p: ProductVisualProfile | null) => void;
+  saveVisualProfile: (projectId: string, p: ProductVisualProfile | null) => Promise<void>;
   version: number;
   legacyImportPending: boolean;
   importLegacyData: () => Promise<void>;
