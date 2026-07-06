@@ -1,32 +1,54 @@
-## Plan
+## Goal
+Fix image generation UX on the concept detail view, use uploaded product photos as the hero image, soften the visual theme for readability, and swap the OpenRouter fallback model.
 
-1. **Stop data loss on refresh**
-   - Make brand and project creation wait for the database save before navigating to the next screen.
-   - If a save fails, show a clear error and keep the user on the form instead of silently continuing with local-only data.
-   - This addresses the likely race where the project/profile/concepts are written before the brand/project row exists, causing security-policy failures and disappearing projects after refresh.
+## 1. Reliable per-section image generation from the concept detail view
 
-2. **Make product images persist reliably**
-   - Change product image/profile saves to an awaited, single upsert-style save per project.
-   - Ensure uploaded product photos and visual profiles are saved after the project exists, not in parallel with project creation.
-   - Keep the current product-photo grounding behavior, but surface failures visibly instead of hiding them in console logs.
+File: `src/routes/app.project.$projectId.concept.$conceptId.tsx`
 
-3. **Make strategy/content/element generation resilient**
-   - Ensure research and concepts are persisted with awaited saves during the generation flow before navigating away.
-   - Add a fallback for `/api/generate-elements` like the existing research/strategy fallback, so “Get elements” still produces usable section content when AI providers or credits are unavailable.
-   - Avoid spending more generation credits during verification; validate with fallback paths and existing saved data.
+- Today the "Generate real image" button only renders when an `img` slot already exists in `imageBySection`, which only happens after the bulk "Generate images" run. Make every section render an image control row unconditionally, so users can generate a section's image directly from the concept view without first running elements + bulk generation.
+- Change `handleGenerateRealImage(sectionId)` to not require `imageBySection[sectionId]`. Derive prompt/style/mode from:
+  - the elements record if it exists (`elements.sections[…].imagePrompts[0]`, `elements.globalStyle.imageStyle`, `sec.imageMode`),
+  - otherwise from the section itself (`section.imagePrompt`, `section.imageStyle`, `section.imageMode`).
+- Skip the hero when an uploaded product photo exists (already guarded — keep and extend to bulk flow).
+- Confirm the merge behaviour in `store.saveImages` (already keyed by `sectionId` and merges with existing) covers the bulk path so regenerating one section never removes others. Add the same guarantee explicitly in `updateImageForSection` (single-section update path is already safe — verify no accidental array replace).
 
-4. **Fix image generation/display behavior**
-   - Update the image generation route to use the dedicated image-generation endpoint with the correct Gemini/OpenAI body shape instead of the legacy chat endpoint for new image generation.
-   - Preserve section-level storage: generating one section updates only that section’s image row, never deletes or overwrites other section images.
-   - Keep uploaded product photos as the hero image after refresh, while other sections can use independently generated images/placeholders.
+## 2. Use uploaded product photo directly for the hero section
 
-5. **Improve user-visible reliability**
-   - Add “Saving…” / “Generating…” disabled states on the brand/product forms so users cannot submit twice during long saves.
-   - Replace silent console-only persistence failures with toasts/messages that explain exactly what was not saved.
-   - Keep scope focused on persistence, elements, and image generation — no copy-generation redesign.
+File: `src/routes/api/generate-images.ts` and `src/routes/app.project.$projectId.concept.$conceptId.tsx`
 
-## Technical notes
+- Server route: when the incoming item has `imageMode === "product_packshot"` AND the project has product reference images loaded, short-circuit generation and return a `real`-status preview whose `previewUrl`/`realUrl` is the first reference photo's data URL (no AI call, no credit spend). Non-hero sections still call the Gemini image endpoint with the references as guidance only.
+- Client:
+  - Keep the current `heroProductImage` override in `displayImageBySection`.
+  - In the bulk `handleGenerateImages`, always exclude hero sections from the `items` array when `heroProductImage` is present (existing `skipHero` logic — keep) and additionally persist a synthetic hero image entry via `saveImages` so refresh keeps rendering the uploaded photo as hero (not just the in-memory override).
+  - Hide the "Generate real image" button for hero sections when an uploaded photo exists (already done — keep).
 
-- The database policies themselves look ownership-based and reasonable; the observed failures are more likely caused by fire-and-forget writes and dependent writes racing ahead of their parent rows.
-- The main files to change will be the store, brand/product creation routes, concept generation route, elements route, and image generation route.
-- I will verify by checking that saved rows exist after creation and that refresh reloads brand, project, concepts, elements, and images.
+## 3. Theme contrast and readability
+
+File: `src/components/SectionRenderer.tsx` (styling only, no restructuring) and `src/lib/theme/palette.ts`
+
+- In `paletteFromColors`, when the derived `primary` is very dark (L < 0.25), keep it as a text/accent-on-light color but don't allow it to dominate section backgrounds. Add a `surface`/`background` guard so neutrals stay the category-default light values (already the case) — verify no override slips through.
+- In `SectionRenderer`, audit each section wrapper style and:
+  - Replace any full-bleed `background: theme.primary` (or high-alpha primary) section fills with `background: theme.background` or `theme.surface`, and move the color emphasis to CTAs, headings, accent rules, and small chips.
+  - Alternate consecutive sections between `theme.background` and `theme.surface` (or a `withAlpha(theme.accent, 0.04)` tint) so no two dark/heavy sections stack.
+  - Ensure CTAs keep the accent fill (`theme.accent` + `contrastText`) so the color extraction still reads on the page.
+  - Add generous vertical padding (`py-16 md:py-20`) to section wrappers that currently feel cramped; keep existing container widths.
+- Do not change section component structure or copy — style adjustments only.
+
+## 4. OpenRouter fallback model
+
+File: `src/lib/ai/gateway.ts`
+
+- One-line change: `const OPENROUTER_MODEL = "google/gemma-4-31b-it:free";`
+- `callLLMJson` already retries and `extractJson` already strips fences / recovers loose JSON, so no additional handling needed.
+
+## Out of scope
+- Content/copy generation logic.
+- Rebuilding section components.
+- Any DB schema changes.
+
+## Verification
+- Load a project with uploaded product photos → hero renders the uploaded photo, non-hero sections show branded placeholders until generated.
+- Click "Generate real image" on a single non-hero section → only that section updates; other section images remain unchanged after refresh.
+- Bulk "Generate images" → hero is skipped, remaining sections generate; re-running does not wipe previously generated sections.
+- Visual check: no two consecutive sections use a dark/heavy fill; CTAs still carry the brand accent.
+- Force gateway/Lovable failure → OpenRouter tier hits `google/gemma-4-31b-it:free` and JSON still parses.
