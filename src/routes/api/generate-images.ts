@@ -36,6 +36,36 @@ function buildInstruction(imagePrompt: string, negativePrompt: string | undefine
   return `${imagePrompt}.${avoid}`;
 }
 
+function fallbackPreview(item: Body["items"][number], category?: ProjectCategory): GeneratedImagePreview {
+  const mode: ImageMode = item.imageMode ?? inferMode(item.imagePrompt);
+  return {
+    sectionId: item.sectionId,
+    imagePrompt: item.imagePrompt,
+    imageStyle: item.imageStyle ?? "Branded placeholder",
+    previewUrl: makePlaceholderDataUrl(item.sectionId, mode),
+    status: "placeholder",
+    imageMode: mode,
+    category,
+    placeholderLabel: mode.replace(/_/g, " "),
+  };
+}
+
+function makePlaceholderDataUrl(sectionId: string, mode: ImageMode): string {
+  const label = `${sectionId}\n${mode.replace(/_/g, " ")}`
+    .replace(/[&<>]/g, "")
+    .slice(0, 80);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7f1e8"/><stop offset="1" stop-color="#ead7ca"/></linearGradient></defs>
+  <rect width="1280" height="900" fill="url(#g)"/>
+  <rect x="92" y="92" width="1096" height="716" rx="42" fill="#fffaf4" fill-opacity=".72" stroke="#d6b9a6" stroke-opacity=".55"/>
+  <circle cx="1018" cy="214" r="74" fill="#d26a3c" fill-opacity=".16"/>
+  <circle cx="246" cy="706" r="104" fill="#1f1a17" fill-opacity=".06"/>
+  <text x="640" y="430" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#7b4b35" font-weight="700">Visual placeholder</text>
+  <text x="640" y="486" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#9a6a52">${label}</text>
+</svg>`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+}
+
 /** Extract the first base64 image payload. The dedicated image endpoint
  *  normally returns OpenAI-style `data[0].b64_json`; legacy shapes are kept
  *  as a defensive fallback while older gateway responses drain out. */
@@ -146,15 +176,7 @@ async function generateOne(args: {
 
   const failed = (label: string): GeneratedImagePreview => {
     console.warn(`[generate-images] section=${item.sectionId} failed: ${label}`);
-    return {
-      sectionId: item.sectionId,
-      imagePrompt: item.imagePrompt,
-      imageStyle: item.imageStyle ?? "",
-      previewUrl: "",
-      status: "failed",
-      imageMode: mode,
-      category,
-    };
+    return fallbackPreview(item, category);
   };
 
   const controller = new AbortController();
@@ -227,14 +249,8 @@ export const Route = createFileRoute("/api/generate-images")({
         if (!apiKey) {
           console.warn("[generate-images] LOVABLE_API_KEY missing");
           const previews: GeneratedImagePreview[] = (body.items ?? []).map((item) => ({
-            sectionId: item.sectionId,
-            imagePrompt: item.imagePrompt,
-            imageStyle: item.imageStyle ?? "",
-            previewUrl: "",
-            status: "failed",
-            imageMode: item.imageMode ?? inferMode(item.imagePrompt),
-            category: body.category,
-          }));
+          ...fallbackPreview(item, body.category),
+        }));
           return Response.json({ previews });
         }
 
