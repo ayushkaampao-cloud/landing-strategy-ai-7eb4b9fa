@@ -14,7 +14,7 @@ export const Route = createFileRoute("/app/product/new")({
 const GOALS: ProjectGoal[] = ["Sell product", "Collect leads", "Book calls"];
 
 function NewProduct() {
-  const { activeWorkspace, createProduct, createProject, saveProductImages, saveVisualProfile } = useStore();
+  const { activeWorkspace, createProject, saveProductImages, saveVisualProfile } = useStore();
   const navigate = useNavigate();
 
   const [sourceMode, setSourceMode] = useState<ProjectSourceMode>("brief");
@@ -60,7 +60,7 @@ function NewProduct() {
     e.preventDefault();
     if (!name || saving) return;
     setSaving(true);
-    const product = createProduct({
+    const product = {
       workspaceId: activeWorkspace.id,
       name,
       shortDescription: shortDesc,
@@ -69,7 +69,12 @@ function NewProduct() {
       priceInfo: price,
       productUrl: productUrl || undefined,
       siteUrl: siteUrl || undefined,
-    });
+      id:
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2) + Date.now().toString(36),
+      createdAt: new Date().toISOString(),
+    };
     try {
       const project = await createProject({
         workspaceId: activeWorkspace.id,
