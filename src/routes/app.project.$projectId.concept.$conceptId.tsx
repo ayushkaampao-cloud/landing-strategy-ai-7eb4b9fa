@@ -454,8 +454,9 @@ function ConceptDetail() {
       if (data.fallback) {
         toast.message("Elements generated with local fallback because AI is unavailable.");
       }
+      const { fallback: _fallback, error: _fallbackError, ...elementsToSave } = data;
 
-      await saveElements(conceptId, data);
+      await saveElements(conceptId, elementsToSave);
       setElementsVersion((v) => v + 1);
       setElementsStep(4);
     } catch (err) {
