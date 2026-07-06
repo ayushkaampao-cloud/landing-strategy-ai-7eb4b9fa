@@ -33,9 +33,10 @@ function mergeSectionElement(section: SectionProps, element: LandingPageElements
     section.type === "feature-grid" ||
     section.type === "faq" ||
     section.type === "comparison";
+  const elementBullets = element.bullets ?? [];
   const nextItems =
-    itemDriven && shouldReplaceItems(section) && (element.bullets ?? []).length > 0
-      ? element.bullets.map(parseBulletToItem)
+    itemDriven && shouldReplaceItems(section) && elementBullets.length > 0
+      ? elementBullets.map(parseBulletToItem)
       : section.items;
 
   return {
