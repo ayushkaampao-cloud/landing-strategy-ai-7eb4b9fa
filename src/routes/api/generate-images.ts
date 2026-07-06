@@ -17,7 +17,7 @@ interface Body {
 }
 
 const GEMINI_IMAGE_MODEL = "google/gemini-3.1-flash-image";
-const LOVABLE_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const LOVABLE_IMAGE_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
 const REQUEST_TIMEOUT_MS = 45_000;
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365; // 1 year
 
@@ -36,11 +36,16 @@ function buildInstruction(imagePrompt: string, negativePrompt: string | undefine
   return `${imagePrompt}.${avoid}`;
 }
 
-/** Extract the first base64 image payload from a Gemini image chat completion response.
- *  The Gateway normalizes upstream shapes; images may appear on the message as an
- *  `images` array of data URLs, or as a text-content-block data URL, or embedded in
- *  the string content. We try each in order. */
+/** Extract the first base64 image payload. The dedicated image endpoint
+ *  normally returns OpenAI-style `data[0].b64_json`; legacy shapes are kept
+ *  as a defensive fallback while older gateway responses drain out. */
 function extractBase64Png(data: unknown): { b64: string; mime: string } | null {
+  const imageRoot = data as { data?: Array<{ b64_json?: string; mime_type?: string }> };
+  const first = imageRoot.data?.[0];
+  if (first?.b64_json) {
+    return { b64: first.b64_json, mime: first.mime_type ?? "image/png" };
+  }
+
   const root = data as {
     choices?: Array<{
       message?: {
@@ -155,7 +160,7 @@ async function generateOne(args: {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch(LOVABLE_GATEWAY_URL, {
+    const res = await fetch(LOVABLE_IMAGE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -164,8 +169,8 @@ async function generateOne(args: {
       signal: controller.signal,
       body: JSON.stringify({
         model: GEMINI_IMAGE_MODEL,
-        modalities: ["image", "text"],
         messages: [{ role: "user", content: contentBlocks }],
+        modalities: ["image", "text"],
       }),
     });
     if (!res.ok) {
