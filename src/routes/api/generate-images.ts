@@ -173,16 +173,18 @@ async function generateOne(args: {
   // first one directly instead of calling the image model. Saves credits and
   // guarantees the hero shows the actual product.
   if (mode === "product_packshot" && refImages.length > 0) {
-    return { preview: {
-      sectionId: item.sectionId,
-      imagePrompt: "Uploaded product photo",
-      imageStyle: item.imageStyle ?? "uploaded",
-      previewUrl: refImages[0],
-      realUrl: refImages[0],
-      status: "real",
-      imageMode: mode,
-      category,
-    } };
+    return {
+      preview: {
+        sectionId: item.sectionId,
+        imagePrompt: "Uploaded product photo",
+        imageStyle: item.imageStyle ?? "uploaded",
+        previewUrl: refImages[0],
+        realUrl: refImages[0],
+        status: "real" as const,
+        imageMode: mode,
+        category,
+      },
+    };
   }
 
   const instruction = buildInstruction(item.imagePrompt, item.negativePrompt, refImages.length > 0);
@@ -239,15 +241,17 @@ async function generateOne(args: {
       .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
     if (signErr || !signed?.signedUrl) return failed(`sign url: ${signErr?.message ?? "no url"}`);
 
-    return { preview: {
-      sectionId: item.sectionId,
-      imagePrompt: item.imagePrompt,
-      imageStyle: item.imageStyle ?? "",
-      previewUrl: signed.signedUrl,
-      status: "generated",
-      imageMode: mode,
-      category,
-    } };
+    return {
+      preview: {
+        sectionId: item.sectionId,
+        imagePrompt: item.imagePrompt,
+        imageStyle: item.imageStyle ?? "",
+        previewUrl: signed.signedUrl,
+        status: "generated" as const,
+        imageMode: mode,
+        category,
+      },
+    };
   } catch (err) {
     return failed((err as Error).message || "unknown error");
   } finally {
