@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import type { GeneratedImagePreview, LandingPageConcept, LandingPageElements, SectionProps } from "@/types";
 import { resolveThemePalette } from "@/lib/theme/palette";
 import { downloadConceptZip } from "@/lib/downloadConceptZip";
+import { mergeElementsIntoSections } from "@/lib/landingPageElements";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -119,6 +120,10 @@ function ConceptDetail() {
   }, [images]);
   const productImageCount = getProductImageCount(projectId);
   const visualProfile = getVisualProfile(projectId);
+  const displaySections = useMemo(
+    () => (concept ? mergeElementsIntoSections(concept.schema.sections, elements) : []),
+    [concept, elements],
+  );
   // If the project uploaded product photos, use the first one directly as the
   // hero image instead of an AI-generated one. Other sections still use AI.
   const heroProductImage = useMemo(() => {
@@ -130,7 +135,7 @@ function ConceptDetail() {
     if (!concept) return imageBySection;
     if (!heroProductImage) return imageBySection;
     const map = { ...imageBySection };
-    concept.schema.sections.forEach((s) => {
+    displaySections.forEach((s) => {
       if (s.type === "hero") {
         map[s.id] = {
           sectionId: s.id,
@@ -145,7 +150,7 @@ function ConceptDetail() {
     });
 
     return map;
-  }, [concept, imageBySection, heroProductImage]);
+  }, [concept, displaySections, imageBySection, heroProductImage]);
 
   const theme = useMemo(() => {
     const stored = research?.classification?.themePalette;
@@ -367,7 +372,7 @@ function ConceptDetail() {
   };
 
   async function handleGenerateRealImage(sectionId: string) {
-    const section = concept?.schema.sections.find((s) => s.id === sectionId);
+    const section = displaySections.find((s) => s.id === sectionId) ?? concept?.schema.sections.find((s) => s.id === sectionId);
     if (!section) return;
     if (section.type === "hero" && heroProductImage) return;
 
@@ -503,11 +508,11 @@ function ConceptDetail() {
     setImagesError(null);
     try {
       const negBySection: Record<string, string | undefined> = {};
-      concept!.schema.sections.forEach((s) => {
+      displaySections.forEach((s) => {
         negBySection[s.id] = s.negativePrompt;
       });
       const heroSectionIds = new Set(
-        concept!.schema.sections.filter((s) => s.type === "hero").map((s) => s.id),
+        displaySections.filter((s) => s.type === "hero").map((s) => s.id),
       );
       const skipHero = !!heroProductImage;
       const sectionsWithElementPrompts = new Set(
@@ -528,10 +533,17 @@ function ConceptDetail() {
                 negativePrompt: negBySection[sectionId],
               })),
             );
+      const existingRenderableSectionIds = new Set(
+        images
+          .filter((img) => img.sectionId && img.status !== "failed" && (img.realUrl || img.previewUrl))
+          .map((img) => img.sectionId),
+      );
       const items = [
         ...heroFallbackItems,
         ...elements.sections.flatMap((sec) =>
           (sec.imagePrompts ?? [])
+            .filter(() => sec.imageMode !== "no_image_needed")
+            .filter(() => !existingRenderableSectionIds.has(sec.sectionId))
             .filter(() => !(skipHero && heroSectionIds.has(sec.sectionId)))
             .map((p) => ({
               sectionId: sec.sectionId,
@@ -542,6 +554,12 @@ function ConceptDetail() {
             })),
         ),
       ];
+
+      if (items.length === 0) {
+        setImagesError(null);
+        toast.message("No missing section images to generate.");
+        return;
+      }
 
       const res = await fetch("/api/generate-images", {
         method: "POST",
@@ -605,7 +623,7 @@ function ConceptDetail() {
               </div>
             </div>
             <div style={{ background: theme.background }}>
-              {concept.schema.sections.map((s) => {
+              {displaySections.map((s) => {
                 const isHeroWithUpload = s.type === "hero" && !!heroProductImage;
                 const img = displayImageBySection[s.id];
                 const activeUrl = img?.realUrl || img?.previewUrl || "";
@@ -776,11 +794,11 @@ function ConceptDetail() {
               <div className="flex items-center justify-between mb-3">
                 <div className="mono-tag text-muted-foreground">Content outline</div>
                 <div className="mono-tag text-muted-foreground">
-                  {concept.schema.sections.length}
+                  {displaySections.length}
                 </div>
               </div>
               <ol className="space-y-0.5">
-                {concept.schema.sections.map((s, i) => (
+                {displaySections.map((s, i) => (
                   <li key={s.id}>
                     <button
                       onClick={() => scrollTo(s.id)}
