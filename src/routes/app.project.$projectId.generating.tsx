@@ -23,7 +23,7 @@ function Generating() {
     projects,
     products,
     workspaces,
-    saveConcepts,
+    saveConceptsAsync,
     saveResearch,
   } = useStore();
   const navigate = useNavigate();
@@ -93,7 +93,7 @@ function Generating() {
         research = rJson as ProjectResearch;
         if (research.note) setNote(research.note);
       }
-      saveResearch(project.id, research);
+      await saveResearch(project.id, research);
 
       setStep(3);
       // 2. Strategies
@@ -120,7 +120,7 @@ function Generating() {
         concepts = sJson.concepts;
       }
       setStep(5);
-      saveConcepts(project.id, concepts);
+      await saveConceptsAsync(project.id, concepts);
       setTimeout(() => {
         navigate({
           to: "/app/project/$projectId",
@@ -133,7 +133,13 @@ function Generating() {
       setError("Content generation is temporarily unavailable — please try again in a moment.");
       // Last-resort fallback so the user gets something
       const concepts = generateConceptsForProject(workspace, product, project);
-      saveConcepts(project.id, concepts);
+      try {
+        await saveConceptsAsync(project.id, concepts);
+      } catch (saveErr) {
+        console.error("save fallback concepts", saveErr);
+        setError("The fallback content was created, but could not be saved. Please try again before refreshing.");
+        return;
+      }
       setTimeout(() => {
         navigate({
           to: "/app/project/$projectId",
