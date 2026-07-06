@@ -402,8 +402,13 @@ function ConceptDetail() {
         throw new Error("Image generation returned no image");
       }
       updateImageForSection(conceptId, sectionId, {
-        realUrl: preview.previewUrl,
-        status: "real",
+        previewUrl: preview.previewUrl,
+        realUrl: preview.status === "generated" ? preview.previewUrl : undefined,
+        status: preview.status === "generated" ? "real" : preview.status,
+        imagePrompt: preview.imagePrompt,
+        imageStyle: preview.imageStyle,
+        imageMode: preview.imageMode,
+        placeholderLabel: preview.placeholderLabel,
       });
       setImagesVersion((v) => v + 1);
       toast.success("Real image generated");
