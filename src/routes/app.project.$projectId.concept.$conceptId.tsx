@@ -961,6 +961,7 @@ function ConceptDetail() {
                       images: Object.values(displayImageBySection),
                       project,
                       workspace,
+                      sections: displaySections,
                       onProgress: (done, total) => setDlProgress({ done, total }),
                     });
                     if (skipped.length > 0) {
