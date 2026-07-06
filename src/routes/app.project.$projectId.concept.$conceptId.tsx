@@ -474,15 +474,26 @@ function ConceptDetail() {
         concept!.schema.sections.filter((s) => s.type === "hero").map((s) => s.id),
       );
       const skipHero = !!heroProductImage;
+      const sectionsWithElementPrompts = new Set(
+        elements.sections
+          .filter((sec) => (sec.imagePrompts ?? []).length > 0)
+          .map((sec) => sec.sectionId),
+      );
+      const heroFallbackItems = skipHero
+        ? []
+        : [...heroSectionIds]
+            .filter((id) => !sectionsWithElementPrompts.has(id))
+            .flatMap((sectionId) =>
+              elements.hero.imagePrompts.map((p) => ({
+                sectionId,
+                imagePrompt: p,
+                imageStyle: elements.globalStyle.imageStyle,
+                imageMode: "product_packshot" as const,
+                negativePrompt: negBySection[sectionId],
+              })),
+            );
       const items = [
-        ...elements.hero.imagePrompts
-          .map((p, i) => ({
-            sectionId: `hero-${i}`,
-            imagePrompt: p,
-            imageStyle: elements.globalStyle.imageStyle,
-            negativePrompt: undefined as string | undefined,
-          }))
-          .filter(() => !skipHero),
+        ...heroFallbackItems,
         ...elements.sections.flatMap((sec) =>
           (sec.imagePrompts ?? [])
             .filter(() => !(skipHero && heroSectionIds.has(sec.sectionId)))
