@@ -411,7 +411,11 @@ function ConceptDetail() {
         placeholderLabel: preview.placeholderLabel,
       });
       setImagesVersion((v) => v + 1);
-      toast.success("Real image generated");
+      if (preview.status === "placeholder") {
+        toast.message("Image provider unavailable — kept a branded placeholder for this section.");
+      } else {
+        toast.success("Real image generated");
+      }
     } catch (err) {
       updateImageForSection(conceptId, sectionId, { status: "failed" });
       setImagesVersion((v) => v + 1);
