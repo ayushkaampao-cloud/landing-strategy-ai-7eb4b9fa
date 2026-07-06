@@ -626,9 +626,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setData((d) => {
       // update product to have its id changed to project.id in-memory
       const products = product
-        ? d.products.map((pr) =>
-            pr.id === product.id ? { ...pr, id } : pr,
-          )
+        ? d.products.some((pr) => pr.id === product.id)
+          ? d.products.map((pr) =>
+              pr.id === product.id ? { ...pr, id } : pr,
+            )
+          : [...d.products, { ...product, id }]
         : d.products;
       return { ...d, projects: [...d.projects, project], products };
     });
