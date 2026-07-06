@@ -3,6 +3,7 @@ import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { SectionRenderer } from "@/components/SectionRenderer";
 import { getSharedConcept, type SharedConceptPayload } from "@/lib/preview.functions";
 import { resolveThemePalette } from "@/lib/theme/palette";
+import { mergeElementsIntoSections } from "@/lib/landingPageElements";
 import type { ThemePalette } from "@/types";
 
 const sharedConceptQuery = (token: string) =>
@@ -63,7 +64,7 @@ function PreviewPage() {
 
   if (!data) return <PreviewMissing />;
 
-  const { concept, images, themePalette, category } = data;
+  const { concept, elements, images, themePalette, category } = data;
   const theme: ThemePalette =
     themePalette ?? resolveThemePalette({ category: category ?? undefined });
 
@@ -71,11 +72,12 @@ function PreviewPage() {
   images.forEach((img) => {
     if (img.sectionId) imageBySection[img.sectionId] = img;
   });
+  const displaySections = mergeElementsIntoSections(concept.schema.sections, elements);
 
   return (
     <div className="min-h-screen" style={{ background: theme.background }}>
       <div className="max-w-3xl mx-auto">
-        {concept.schema.sections.map((s) => {
+        {displaySections.map((s) => {
           const img = imageBySection[s.id];
           const isPlaceholderImg = img && img.status === "placeholder" && !img.realUrl;
           const activeUrl = img?.realUrl || img?.previewUrl || "";
