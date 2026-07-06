@@ -2,6 +2,7 @@ import JSZip from "jszip";
 import type {
   GeneratedImagePreview,
   LandingPageConcept,
+  SectionProps,
   Project,
   Workspace,
 } from "@/types";
@@ -11,6 +12,7 @@ interface Args {
   images: GeneratedImagePreview[];
   project: Project;
   workspace: Workspace;
+  sections?: SectionProps[];
   onProgress?: (done: number, total: number) => void;
 }
 
@@ -36,7 +38,7 @@ const extFromMime = (mime: string): string => {
   return "png";
 };
 
-function buildCopyMarkdown(concept: LandingPageConcept, skipped: string[]): string {
+function buildCopyMarkdown(concept: LandingPageConcept, skipped: string[], sections: SectionProps[]): string {
   const lines: string[] = [];
   lines.push(`# ${concept.conceptName}`);
   lines.push("");
@@ -47,7 +49,7 @@ function buildCopyMarkdown(concept: LandingPageConcept, skipped: string[]): stri
   lines.push("---");
   lines.push("");
 
-  concept.schema.sections.forEach((s, i) => {
+  sections.forEach((s, i) => {
     const n = String(i + 1).padStart(2, "0");
     const heading = `${n}. ${s.type.toUpperCase()}${s.title ? ` — ${s.title}` : ""}`;
     lines.push(`## ${heading}`);
@@ -99,9 +101,11 @@ export async function downloadConceptZip({
   images,
   project,
   workspace,
+  sections,
   onProgress,
 }: Args): Promise<Result> {
   const zip = new JSZip();
+  const renderedSections = sections ?? concept.schema.sections;
 
   const imageBySection: Record<string, GeneratedImagePreview> = {};
   images.forEach((img) => {
@@ -110,11 +114,11 @@ export async function downloadConceptZip({
 
   const downloadable: Array<{
     index: number;
-    section: (typeof concept.schema.sections)[number];
+    section: SectionProps;
     url: string;
   }> = [];
 
-  concept.schema.sections.forEach((section, i) => {
+  renderedSections.forEach((section, i) => {
     const img = imageBySection[section.id];
     if (!img) return;
     if (img.status === "placeholder" && !img.realUrl) return;
@@ -147,7 +151,7 @@ export async function downloadConceptZip({
     }
   }
 
-  zip.file("copy.md", buildCopyMarkdown(concept, skipped));
+  zip.file("copy.md", buildCopyMarkdown(concept, skipped, renderedSections));
 
   const filename = `${slug(workspace.name)}-${slug(project.projectName)}-${slug(concept.conceptName)}-page.zip`;
 
