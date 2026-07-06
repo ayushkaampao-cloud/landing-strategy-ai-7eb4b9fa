@@ -27,7 +27,14 @@ function shouldReplaceItems(section: SectionProps): boolean {
 }
 
 function generatedText(value: string | undefined, fallback: string | undefined): string | undefined {
+  if (!isPlaceholderText(fallback)) return fallback;
   return value && value.trim().length > 0 ? value : fallback;
+}
+
+function shouldReplaceBullets(section: SectionProps): boolean {
+  const bullets = section.bullets ?? [];
+  if (bullets.length === 0) return true;
+  return bullets.every(isPlaceholderText);
 }
 
 function mergeSectionElement(section: SectionProps, element: LandingPageElementsSection | undefined): SectionProps {
@@ -48,10 +55,14 @@ function mergeSectionElement(section: SectionProps, element: LandingPageElements
   return {
     ...section,
     title: generatedText(element.headline, section.title),
-    subtitle: element.subheadline ?? section.subtitle,
-    body: element.body ?? section.body,
-    bullets: itemDriven ? section.bullets : element.bullets ?? section.bullets,
-    ctaLabel: element.cta ?? section.ctaLabel,
+    subtitle: generatedText(element.subheadline, section.subtitle),
+    body: generatedText(element.body, section.body),
+    bullets: itemDriven
+      ? section.bullets
+      : shouldReplaceBullets(section)
+        ? element.bullets ?? section.bullets
+        : section.bullets,
+    ctaLabel: generatedText(element.cta, section.ctaLabel),
     imagePrompt: element.imagePrompts?.[0] ?? section.imagePrompt,
     imageMode: element.imageMode ?? section.imageMode,
     negativePrompt: element.negativePrompt ?? section.negativePrompt,
@@ -74,10 +85,10 @@ export function mergeElementsIntoSections(
       return mergeSectionElement(
         {
           ...section,
-          title: elements.hero.headline || section.title,
-          subtitle: elements.hero.subheadline || section.subtitle,
-          ctaLabel: elements.hero.primaryCTA || section.ctaLabel,
-          ctaSecondaryLabel: elements.hero.secondaryCTA ?? section.ctaSecondaryLabel,
+          title: generatedText(elements.hero.headline, section.title),
+          subtitle: generatedText(elements.hero.subheadline, section.subtitle),
+          ctaLabel: generatedText(elements.hero.primaryCTA, section.ctaLabel),
+          ctaSecondaryLabel: generatedText(elements.hero.secondaryCTA, section.ctaSecondaryLabel),
           imagePrompt: elements.hero.imagePrompts?.[0] ?? section.imagePrompt,
           imageMode: heroElement?.imageMode ?? section.imageMode ?? "product_packshot",
           negativePrompt: heroElement?.negativePrompt ?? section.negativePrompt,
