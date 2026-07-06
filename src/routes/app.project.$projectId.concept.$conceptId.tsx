@@ -48,6 +48,7 @@ function ConceptDetail() {
     updateImageForSection,
     getProductImageCount,
     getProductImages,
+    loadProductImages,
 
     getVisualProfile,
     setActiveWorkspace,
