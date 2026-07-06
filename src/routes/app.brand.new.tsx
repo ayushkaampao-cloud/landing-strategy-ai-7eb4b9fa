@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { TopBar } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/brand/new")({
   component: NewBrand,
@@ -16,17 +17,25 @@ function NewBrand() {
   const [desc, setDesc] = useState("");
   const [voice, setVoice] = useState<string[]>([]);
   const [audience, setAudience] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name) return;
-    createWorkspace({
-      name,
-      brandDescription: desc,
-      brandVoice: voice,
-      primaryAudience: audience,
-    });
-    navigate({ to: "/app/product/new" });
+    if (!name || saving) return;
+    setSaving(true);
+    try {
+      await createWorkspace({
+        name,
+        brandDescription: desc,
+        brandVoice: voice,
+        primaryAudience: audience,
+      });
+      navigate({ to: "/app/product/new" });
+    } catch (err) {
+      toast.error("Brand could not be saved: " + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggle = (v: string) =>
@@ -81,9 +90,10 @@ function NewBrand() {
           />
           <button
             type="submit"
-            className="h-10 px-5 bg-ink text-background font-medium rounded-md text-sm"
+            disabled={saving}
+            className="h-10 px-5 bg-ink text-background font-medium rounded-md text-sm disabled:opacity-60"
           >
-            Continue to product →
+            {saving ? "Saving brand…" : "Continue to product →"}
           </button>
         </form>
       </div>
