@@ -81,6 +81,17 @@ function ConceptDetail() {
   const regeneratingRef = useRef(false);
 
   const project = projects.find((p) => p.id === projectId);
+
+  // Ensure uploaded product photos are hydrated from the DB on hard refresh —
+  // loadUserData intentionally skips source_image_urls to avoid multi-MB
+  // payloads, so without this the hero silently reverts to the AI image.
+  useEffect(() => {
+    if (!projectId) return;
+    loadProductImages(projectId).catch((err) => {
+      console.error("loadProductImages (concept route)", err);
+    });
+  }, [projectId, loadProductImages]);
+
   const product = products.find((p) => p.id === project?.productId);
   const workspace = workspaces.find((w) => w.id === project?.workspaceId);
   const concept = concepts.find((c) => c.id === conceptId);
