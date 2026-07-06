@@ -590,12 +590,12 @@ function ConceptDetail() {
         }),
       });
       if (!res.ok) throw new Error("Image generation failed");
-      const data = (await res.json()) as { previews: GeneratedImagePreview[] };
+      const data = (await res.json()) as { previews: GeneratedImagePreview[]; warning?: string };
       await saveImages(conceptId, [...heroUploads, ...data.previews]);
       setImgFailed({});
       setImgRetry({});
       setImagesVersion((v) => v + 1);
-
+      if (data.warning) toast.message(data.warning);
     } catch (err) {
       setImagesError((err as Error).message);
     } finally {
