@@ -122,7 +122,7 @@ interface StoreContextValue extends AppData {
     conceptId: string,
     sectionId: string,
     patch: Partial<GeneratedImagePreview>,
-  ) => void;
+  ) => Promise<void>;
   getProductImages: (projectId: string) => ProductImageRef[];
   loadProductImages: (projectId: string) => Promise<ProductImageRef[]>;
   saveProductImages: (projectId: string, imgs: ProductImageRef[]) => Promise<void>;
@@ -1021,7 +1021,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [bump, persistImagesToDb]);
 
   const updateImageForSection = useCallback(
-    (conceptId: string, sectionId: string, patch: Partial<GeneratedImagePreview>) => {
+    async (conceptId: string, sectionId: string, patch: Partial<GeneratedImagePreview>) => {
       const current = dataRef.current.images[conceptId] ?? [];
       const idx = current.findIndex((i) => i.sectionId === sectionId);
       let next: GeneratedImagePreview[];
@@ -1040,36 +1040,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           } as GeneratedImagePreview,
         ];
       }
+      if (dataRef.current.user) {
+        const elemId = await persistImagesToDb(conceptId, next);
+        const merged = next.find((i) => i.sectionId === sectionId)!;
+        // Remove any existing row for this section, then insert the fresh one.
+        const { error: delErr } = await supabase
+          .from("image_previews")
+          .delete()
+          .eq("element_id", elemId)
+          .eq("metadata->>sectionId", sectionId);
+        if (delErr) throw delErr;
+        const { error: insErr } = await supabase.from("image_previews").insert({
+          element_id: elemId,
+          preview_url: merged.previewUrl,
+          status: merged.status,
+          metadata: {
+            sectionId: merged.sectionId,
+            imagePrompt: merged.imagePrompt,
+            imageStyle: merged.imageStyle,
+            imageMode: merged.imageMode,
+            category: merged.category,
+            realUrl: merged.realUrl,
+            placeholderLabel: merged.placeholderLabel,
+          },
+        });
+        if (insErr) throw insErr;
+      }
       setData((d) => ({ ...d, images: { ...d.images, [conceptId]: next } }));
       bump();
-      if (dataRef.current.user) {
-        (async () => {
-          const elemId = await persistImagesToDb(conceptId, next);
-          const merged = next.find((i) => i.sectionId === sectionId)!;
-          // Remove any existing row for this section, then insert the fresh one.
-          const { error: delErr } = await supabase
-            .from("image_previews")
-            .delete()
-            .eq("element_id", elemId)
-            .eq("metadata->>sectionId", sectionId);
-          if (delErr) throw delErr;
-          const { error: insErr } = await supabase.from("image_previews").insert({
-            element_id: elemId,
-            preview_url: merged.previewUrl,
-            status: merged.status,
-            metadata: {
-              sectionId: merged.sectionId,
-              imagePrompt: merged.imagePrompt,
-              imageStyle: merged.imageStyle,
-              imageMode: merged.imageMode,
-              category: merged.category,
-              realUrl: merged.realUrl,
-              placeholderLabel: merged.placeholderLabel,
-            },
-          });
-          if (insErr) throw insErr;
-        })().catch((err) => console.error("updateImageForSection db", err));
-      }
     },
     [bump, persistImagesToDb],
   );
