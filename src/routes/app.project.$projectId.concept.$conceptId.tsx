@@ -319,8 +319,12 @@ function ConceptDetail() {
           console.error("[strategies] api error:", res.status, detail);
           throw new Error("provider_unavailable");
         }
-        const data = (await res.json()) as { concepts: LandingPageConcept[] };
-        const fresh = data.concepts[0];
+        const data = (await res.json()) as { concepts?: LandingPageConcept[]; fallback?: boolean };
+        let fresh = data.concepts?.[0];
+        if (data.fallback || !fresh) {
+          const skeleton = generateConceptsForProject(workspace, product, project);
+          fresh = skeleton.find((c) => c.templateFamily === concept.templateFamily);
+        }
         if (!fresh) throw new Error("No concept returned");
         // Preserve stable id/createdAt so URL stays valid and elements/images
         // rows don't cascade-delete.
